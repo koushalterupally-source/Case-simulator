@@ -119,19 +119,19 @@ export const CASE_SCAFFOLDS: CaseScaffold[] = [
       },
       {
         roleTag: 'MANAGEMENT',
-        patientContext: 'ECG confirms STEMI with primary PCI delayed >120 minutes in secondary center.',
+        patientContext: 'ECG obtained. Nearest catheterisation lab is over 120 minutes away from this centre.',
         consequenceOnRight: 'Fibrinolytic therapy initiated rapidly with complete ST-resolution.',
         consequenceOnWrong: 'Delayed reperfusion leads to extensive anterior wall necrosis.',
       },
       {
         roleTag: 'PHARM',
-        patientContext: 'Selecting antiplatelet and anticoagulant regimen for acute ACS.',
+        patientContext: 'Selecting the antiplatelet and anticoagulant regimen for this presentation.',
         consequenceOnRight: 'Optimal antithrombotic therapy maintained without major bleeding.',
         consequenceOnWrong: 'Suboptimal dosing or inappropriate combination increases complication risk.',
       },
       {
         roleTag: 'PREVENTION',
-        patientContext: 'Secondary prevention planning prior to discharge post-STEMI.',
+        patientContext: 'Secondary prevention planning prior to discharge.',
         consequenceOnRight: 'Statin, ACE inhibitor, Beta-blocker, and DAPT prescribed appropriately.',
         consequenceOnWrong: 'Missing secondary prevention medications increases 1-year re-infarction risk.',
       },
@@ -236,19 +236,19 @@ export const CASE_SCAFFOLDS: CaseScaffold[] = [
     gateMilestones: [
       {
         roleTag: 'INVESTIGATION',
-        patientContext: 'High clinical probability PE patient presenting with severe hypoxemia.',
+        patientContext: 'Post-operative patient with sudden severe hypoxaemia and pleuritic chest pain.',
         consequenceOnRight: 'CTPA ordered immediately confirming massive pulmonary embolism.',
         consequenceOnWrong: 'Non-diagnostic investigations ordered leading to delayed treatment.',
       },
       {
         roleTag: 'MANAGEMENT',
-        patientContext: 'Confirmed acute massive PE with hemodynamic instability (BP 90/60 mmHg).',
+        patientContext: 'Imaging now available; the patient remains haemodynamically unstable at 90/60 mmHg.',
         consequenceOnRight: 'Therapeutic anticoagulation and thrombolytic evaluation initiated.',
         consequenceOnWrong: 'Delayed anticoagulation leads to recurrent embolization and obstructive shock.',
       },
       {
         roleTag: 'PHARM',
-        patientContext: 'Selecting initial anticoagulant dosing in hemodynamically unstable PE.',
+        patientContext: 'Selecting initial anticoagulant dosing in a haemodynamically unstable patient.',
         consequenceOnRight: 'Weight-adjusted LMWH or Unfractionated Heparin bolus administered.',
         consequenceOnWrong: 'Inadequate heparinization fails to halt clot propagation.',
       },
@@ -352,13 +352,13 @@ export const CASE_SCAFFOLDS: CaseScaffold[] = [
     gateMilestones: [
       {
         roleTag: 'PHARM',
-        patientContext: 'Managing severe DKA acidosis and serum potassium shift.',
+        patientContext: 'Managing severe metabolic acidosis and the potassium shift anticipated on starting insulin.',
         consequenceOnRight: 'Potassium checked and replaced before/during regular insulin drip.',
         consequenceOnWrong: 'Starting insulin without monitoring potassium precipitates severe hypokalemia.',
       },
       {
         roleTag: 'MANAGEMENT',
-        patientContext: 'Resuscitating severely dehydrated DKA patient with high blood glucose.',
+        patientContext: 'Resuscitating a severely dehydrated patient with markedly elevated blood glucose.',
         consequenceOnRight: 'IV Normal Saline 1-1.5 L given in first hour restoring organ perfusion.',
         consequenceOnWrong: 'Inadequate fluid resuscitation delays clearance of ketoacids and worsening AKI.',
       },
@@ -450,13 +450,13 @@ export const CASE_SCAFFOLDS: CaseScaffold[] = [
     gateMilestones: [
       {
         roleTag: 'EMERGENCY',
-        patientContext: 'Active eclamptic seizure or post-seizure eclampsia presentation.',
+        patientContext: 'Third-trimester patient with an active generalised tonic-clonic seizure.',
         consequenceOnRight: 'Magnesium sulfate IV bolus administered halting recurrence.',
         consequenceOnWrong: 'Inappropriate anticonvulsant (e.g. Diazepam alone) fails to prevent recurrent eclamptic fits.',
       },
       {
         roleTag: 'MANAGEMENT',
-        patientContext: 'Severe hypertension (BP >160/110 mmHg) in eclampsia.',
+        patientContext: 'Severe hypertension above 160/110 mmHg in a pregnant patient.',
         consequenceOnRight: 'IV Labetalol titrated to achieve target diastolic BP 90-100 mmHg.',
         consequenceOnWrong: 'Uncontrolled severe BP increases risk of maternal hemorrhagic stroke.',
       },
@@ -530,7 +530,7 @@ export const CASE_SCAFFOLDS: CaseScaffold[] = [
     gateMilestones: [
       {
         roleTag: 'EMERGENCY',
-        patientContext: 'Patient in obstructive shock with classic clinical tension pneumothorax triad.',
+        patientContext: 'Shocked trauma patient with tracheal deviation, unilateral absent breath sounds and hyperresonance.',
         consequenceOnRight: 'Immediate 14G needle thoracostomy inserted in 2nd ICS MCL. Rush of air heard, BP jumps to 110/70 mmHg.',
         consequenceOnWrong: 'Delaying decompression for CXR causes cardiac arrest due to impaired venous return!',
       },
@@ -615,7 +615,7 @@ export const CASE_SCAFFOLDS: CaseScaffold[] = [
     gateMilestones: [
       {
         roleTag: 'EMERGENCY',
-        patientContext: 'Suspected bacterial meningitis prior to lumbar puncture.',
+        patientContext: 'Febrile patient with headache, photophobia and neck stiffness; deciding the next step.',
         consequenceOnRight: 'Blood cultures drawn and IV Ceftriaxone + Vancomycin + Dexamethasone administered within 20 mins.',
         consequenceOnWrong: 'Delaying antibiotics for imaging/LP increases mortality and permanent neurological sequelae!',
       },
@@ -700,7 +700,7 @@ export const CASE_SCAFFOLDS: CaseScaffold[] = [
     gateMilestones: [
       {
         roleTag: 'MANAGEMENT',
-        patientContext: 'Confirmed acute appendicitis with Alvarado score 8.',
+        patientContext: 'Migratory right lower quadrant pain with an Alvarado score of 8; deciding definitive management.',
         consequenceOnRight: 'Patient kept NPO, started on IV prophylactic antibiotics and posted for appendectomy.',
         consequenceOnWrong: 'Conservative management leads to appendiceal perforation and peritonitis.',
       },
@@ -791,7 +791,7 @@ export const CASE_SCAFFOLDS: CaseScaffold[] = [
     gateMilestones: [
       {
         roleTag: 'MANAGEMENT',
-        patientContext: 'Managing fluid resuscitation in SAM with hypovolemic shock.',
+        patientContext: 'Severely malnourished child in shock; selecting the rehydration fluid.',
         consequenceOnRight: 'ReSoMal fluid given cautiously at 10 mL/kg/hr preventing cardiac overload.',
         consequenceOnWrong: 'Rapid standard RL bolus (e.g. 30 mL/kg) causes acute heart failure and pulmonary edema!',
       },
@@ -973,7 +973,7 @@ export const CASE_SCAFFOLDS: CaseScaffold[] = [
     gateMilestones: [
       {
         roleTag: 'MANAGEMENT',
-        patientContext: 'Active variceal GI bleed with hemodynamic instability.',
+        patientContext: 'Active upper gastrointestinal bleeding with haemodynamic instability.',
         consequenceOnRight: 'Terlipressin + IV Ceftriaxone started and urgent EVL endoscopy performed.',
         consequenceOnWrong: 'Delaying octreotide/terlipressin and endoscopy leads to exsanguinating shock!',
       },
@@ -1070,7 +1070,7 @@ export const CASE_SCAFFOLDS: CaseScaffold[] = [
     gateMilestones: [
       {
         roleTag: 'EMERGENCY',
-        patientContext: 'Septic shock secondary to severe pyelonephritis with high serum lactate.',
+        patientContext: 'Shock with a markedly raised serum lactate in a patient with urinary symptoms.',
         consequenceOnRight: 'Hour-1 Sepsis Bundle completed: Cultures, Lactate, IV Antibiotics, and 30 mL/kg fluid bolus.',
         consequenceOnWrong: 'Delayed fluid resuscitation and broad-spectrum coverage leads to multi-organ dysfunction syndrome (MODS).',
       },

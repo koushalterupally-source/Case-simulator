@@ -190,7 +190,7 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({
                     <span><strong className="text-slate-500">RR:</strong> {turn.vitals.rr} /min</span>
                     <span><strong className="text-slate-500">SpO2:</strong> {turn.vitals.spo2}%</span>
                     <span><strong className="text-slate-500">Temp:</strong> {turn.vitals.temp}</span>
-                    <span><strong className="text-slate-500">GRBS:</strong> {turn.vitals.grbs}</span>
+                    <span><strong className="text-slate-500">GRBS:</strong> {turn.vitals.grbs} mg/dL</span>
                   </div>
 
                   {/* New Results Delivered */}
@@ -238,6 +238,16 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({
                 <span>PYQ Decision Gates ({session.decisionGates.length})</span>
               </h3>
             </div>
+
+            {/* Be honest when the case could not be filled to the mode's advertised depth. */}
+            {session.decisionGates.length < (session.mode === 'rapid' ? 3 : 5) && (
+              <p className="text-[11px] text-amber-300/90 bg-amber-950/30 border border-amber-500/30 rounded-lg p-2 font-sans leading-relaxed">
+                This case bound only {session.decisionGates.length}{' '}
+                {session.decisionGates.length === 1 ? 'gate' : 'gates'} instead of the{' '}
+                {session.mode === 'rapid' ? 3 : 5} this mode expects — the scaffold defines too few
+                decision points, or the loaded index has no matching questions for them. Not a scoring error.
+              </p>
+            )}
 
             <div className="space-y-2 text-xs">
               {session.decisionGates.map((gate, gIdx) => {

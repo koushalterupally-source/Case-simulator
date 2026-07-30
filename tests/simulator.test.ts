@@ -3,6 +3,7 @@ import { addMinutesToSimTime, processTurnOffline, generateScorecard } from '../s
 import { buildCaseSessionFromScaffold } from '../src/utils/caseBinder';
 import { exportQBankToJSON, importQBankFromJSON } from '../src/utils/qbankParser';
 import { DEFAULT_PYQ_INDEX } from '../src/data/defaultQBank';
+import { CASE_SCAFFOLDS } from '../src/data/cases/scaffolds';
 import { CaseSession, PYQItem } from '../src/types';
 
 function runTests() {
@@ -100,6 +101,34 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
   const uncommittedGate = session.decisionGates[0];
   assert(uncommittedGate.isCorrect === undefined, 'Uncommitted gate does NOT expose correctness');
   assert(uncommittedGate.userAnswer === undefined, 'Uncommitted gate does NOT expose user answer');
+
+  // 4b. Gate context must never name its own diagnosis. It is rendered BEFORE the user commits —
+  // in the pre-gate banner, the gates sidebar and the modal — so leaking the condition name there
+  // hands over the answer for free.
+  // Words that describe what the doctor can already observe (presenting complaint, established
+  // history) rather than the diagnosis itself. Mentioning these in gate context is legitimate.
+  const STOPWORDS = new Set([
+    'acute', 'severe', 'chronic', 'syndrome', 'disease', 'shock', 'injury',
+    'failure', 'infection', 'bleed', 'bleeding', 'upper', 'lower', 'post',
+    'with', 'and', 'the',
+  ]);
+  let leaks = 0;
+  for (const scaffold of CASE_SCAFFOLDS) {
+    const terms = scaffold.conditionName
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .filter((w) => w.length > 3 && !STOPWORDS.has(w));
+    for (const milestone of scaffold.gateMilestones) {
+      const ctx = milestone.patientContext.toLowerCase();
+      for (const term of terms) {
+        if (ctx.includes(term)) {
+          console.error(`   ↳ LEAK in ${scaffold.id}: "${term}" appears in patientContext`);
+          leaks++;
+        }
+      }
+    }
+  }
+  assert(leaks === 0, 'No gate patientContext names its own diagnosis');
 
   // 5. JSON Import & Export Test
   console.log('\n--- Test Suite 5: Import & Export Integrity ---');
