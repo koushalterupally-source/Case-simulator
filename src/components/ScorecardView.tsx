@@ -47,13 +47,16 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({ session, onRestart
             </p>
           </div>
 
-          <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl text-center space-y-1 min-w-[140px]">
+          <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl text-center space-y-1 min-w-[180px]">
             <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block">Overall Grade</span>
             <span className="text-4xl font-extrabold text-amber-400 font-mono block">
               {scorecard.overallGrade}
             </span>
-            <span className="text-xs font-mono text-slate-300">
-              Score: {scorecard.overallScore}/100
+            <span className="text-xs font-mono text-slate-300 block font-bold">
+              Score: {scorecard.overallScore} / 100
+            </span>
+            <span className="text-[10px] font-mono text-slate-500 block pt-1 border-t border-slate-800">
+              Formula: (Gate Accuracy × 80) + (Incidental Actions × 10) - (Unindicated Orders × 5)
             </span>
           </div>
         </div>

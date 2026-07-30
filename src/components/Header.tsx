@@ -42,6 +42,10 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
                 NEET-PG / INI-CET
               </span>
+              <span className="bg-emerald-950 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono flex items-center space-x-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>OFFLINE PWA READY</span>
+              </span>
             </div>
             <p className="text-xs text-slate-400">
               Interactive USMLE-Step-3-Style Clinical Case Simulator Driven by Real PYQs
@@ -135,6 +139,11 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Layers className="w-3.5 h-3.5" />
             <span>📚 PYQ Index & Builder</span>
+            {session?.status === 'active' && (
+              <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.2 rounded border border-slate-700">
+                🔒 Keys Redacted
+              </span>
+            )}
           </button>
 
           <button

@@ -7,6 +7,7 @@ interface QBankIndexBuilderProps {
   onUpdatePyqList: (newList: PYQItem[]) => void;
   onParseRawText: (rawText: string) => Promise<void>;
   isParsing: boolean;
+  isCaseActive?: boolean;
 }
 
 export const QBankIndexBuilder: React.FC<QBankIndexBuilderProps> = ({
@@ -14,6 +15,7 @@ export const QBankIndexBuilder: React.FC<QBankIndexBuilderProps> = ({
   onUpdatePyqList,
   onParseRawText,
   isParsing,
+  isCaseActive = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [subjectFilter, setSubjectFilter] = useState<string>('All');
@@ -219,11 +221,21 @@ export const QBankIndexBuilder: React.FC<QBankIndexBuilderProps> = ({
                   <td className="p-3 max-w-xs truncate text-slate-300">
                     {item.stem}
                   </td>
-                  <td className="p-3 font-mono font-bold text-emerald-400 text-center">
-                    {item.correctAnswer}
+                  <td className="p-3 font-mono font-bold text-center">
+                    {isCaseActive ? (
+                      <span className="text-slate-600 bg-slate-950 px-2 py-0.5 rounded text-[10px] border border-slate-800">
+                        🔒 Hidden (Active Case)
+                      </span>
+                    ) : (
+                      <span className="text-emerald-400">{item.correctAnswer}</span>
+                    )}
                   </td>
                   <td className="p-3 max-w-xs text-slate-300 truncate">
-                    {item.conceptTested}
+                    {isCaseActive ? (
+                      <span className="text-slate-600 italic">🔒 Hidden during active simulation case</span>
+                    ) : (
+                      item.conceptTested
+                    )}
                   </td>
                 </tr>
               ))

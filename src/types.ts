@@ -6,7 +6,8 @@ export type RoleTag =
   | 'PHARM'
   | 'COMPLICATION'
   | 'PREVENTION'
-  | 'BASIC-SCIENCE';
+  | 'BASIC-SCIENCE'
+  | 'UNTAGGED';
 
 export type ExamType = 'NEET-PG' | 'INI-CET' | 'CUSTOM';
 
@@ -21,10 +22,14 @@ export type SubjectType =
   | 'Emergency'
   | 'ENT'
   | 'Ophthalmology'
-  | 'Orthopedics';
+  | 'Orthopedics'
+  | 'Basic Science'
+  | 'Previous Year Papers';
 
 export interface PYQItem {
   qid: string; // e.g. NEETPG-2017-034
+  displayId?: string; // human readable ID
+  sourceFile?: string; // provenance filename
   exam: ExamType;
   year: number | string;
   subject: SubjectType;
@@ -37,10 +42,11 @@ export interface PYQItem {
     C: string;
     D: string;
   };
-  correctAnswer: 'A' | 'B' | 'C' | 'D';
+  correctAnswer: 'A' | 'B' | 'C' | 'D' | 'ANSWER-NOT-IN-SOURCE';
   conceptTested: string;
   roleTag: RoleTag;
   explanation?: string;
+  isDraft?: boolean;
 }
 
 export type LocationType = 'Emergency' | 'OPD' | 'Ward' | 'ICU' | 'OT' | 'Home';
@@ -51,7 +57,7 @@ export interface Vitals {
   rr: number;
   spo2: number;
   temp: string;
-  grbs: number | string;
+  grbs: number; // numeric e.g. 110 mg/dL
 }
 
 export interface IncidentalFinding {
@@ -70,6 +76,7 @@ export interface DecisionGate {
   patientContext: string;
   userAnswer?: 'A' | 'B' | 'C' | 'D' | string;
   isCorrect?: boolean;
+  isSelfReview?: boolean;
   consequenceMessage?: string;
   explanationGiven?: string;
   timeSpentSeconds?: number;
@@ -148,6 +155,8 @@ export interface EndOfCaseScorecard {
 
 export interface CaseSession {
   id: string;
+  seed: string;
+  scaffoldId: string;
   title: string;
   mode: CaseMode;
   subject: string;
@@ -165,4 +174,48 @@ export interface CaseSession {
   status: 'active' | 'paused' | 'completed';
   scorecard?: EndOfCaseScorecard;
   blindMode?: boolean;
+}
+
+export interface CaseScaffold {
+  id: string;
+  title: string;
+  conditionName: string;
+  subject: SubjectType;
+  system: string;
+  demographics: {
+    name: string;
+    age: number;
+    gender: 'Male' | 'Female';
+    setting: LocationType;
+  };
+  openingVignette: string; // Vignette describing symptoms WITHOUT naming condition/topic
+  initialVitals: Vitals;
+  clinchingClue: string;
+  clinchingClueTimeMinutes: number; // e.g. 15 mins after sim start
+  // System-by-system physical exam findings
+  examFindingsMap: Record<string, string>; // e.g. 'chest' => 'Bilateral crepitations...', 'cvs' => 'S1 S2 heard...'
+  // History findings map
+  historyMap: Record<string, string>; // e.g. 'allergies' => 'No known drug allergies.', 'past' => 'Hypertension 5 yrs on enalapril'
+  // Investigation results lookup (exact matching or regex pattern)
+  investigationsMap: Record<string, {
+    resultText: string;
+    turnaroundMinutes: number;
+    category: OrderCategory;
+    isIndicative: boolean; // True if indicated for this condition (false = over-ordering)
+  }>;
+  // Trajectory milestones for time elapsed without critical treatment
+  criticalInterventions: {
+    orderOrActionPattern: RegExp;
+    name: string;
+    targetMilestoneMinutes: number; // e.g. must be given within 60 mins
+  }[];
+  // Incidental findings pool
+  incidentalPool: IncidentalFinding[];
+  // Milestones for decision gates binding
+  gateMilestones: {
+    roleTag: RoleTag;
+    patientContext: string;
+    consequenceOnWrong: string;
+    consequenceOnRight: string;
+  }[];
 }

@@ -23,7 +23,7 @@ import { DecisionGateModal } from './DecisionGateModal';
 interface LiveSimulationProps {
   session: CaseSession;
   onSendCommand: (command: string) => void;
-  onCommitGateAnswer: (answer: string) => void;
+  onCommitGateAnswer: (answer: string, gateIndex?: number) => void;
   isProcessing: boolean;
 }
 
@@ -54,7 +54,12 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({
       {activeGate && (
         <DecisionGateModal
           gate={activeGate}
-          onCommitAnswer={onCommitGateAnswer}
+          onCommitAnswer={(answer) =>
+            onCommitGateAnswer(
+              answer,
+              activeModalGateIndex !== null ? activeModalGateIndex : session.currentGateIndex
+            )
+          }
           onClose={() => setActiveModalGateIndex(null)}
           blindMode={session.blindMode}
         />
@@ -114,7 +119,7 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-200 mt-1 font-sans">
-                {currentGateToAnswer.patientContext} — Key concept tested: <span className="text-indigo-300 font-semibold">{currentGateToAnswer.pyq.conceptTested}</span>
+                {currentGateToAnswer.patientContext}
               </p>
             </div>
           </div>
@@ -270,21 +275,24 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({
                     </div>
 
                     <p className="text-[11px] text-slate-300 font-sans line-clamp-1">
-                      {gate.pyq.conceptTested}
+                      {isAnswered ? gate.pyq.conceptTested : gate.patientContext}
                     </p>
 
                     <button
-                      onClick={() => setActiveModalGateIndex(gIdx)}
-                      className={`w-full py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1 cursor-pointer ${
+                      onClick={() => (isAnswered || isActive) && setActiveModalGateIndex(gIdx)}
+                      disabled={!isAnswered && !isActive}
+                      className={`w-full py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1 ${
                         isAnswered
-                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer'
                           : isActive
-                          ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow'
-                          : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300'
+                          ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow cursor-pointer'
+                          : 'bg-slate-800/40 text-slate-600 border border-slate-800/60 cursor-not-allowed'
                       }`}
                     >
-                      <span>{isAnswered ? 'Review Explanation' : 'Open Milestone'}</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      <span>
+                        {isAnswered ? 'Review Explanation' : isActive ? 'Open Milestone' : '🔒 Locked'}
+                      </span>
+                      {isActive && <ChevronRight className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 );

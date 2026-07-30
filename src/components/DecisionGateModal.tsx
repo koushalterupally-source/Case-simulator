@@ -157,24 +157,57 @@ export const DecisionGateModal: React.FC<DecisionGateModalProps> = ({
               <div className={`p-4 rounded-xl border ${
                 gate.isCorrect
                   ? 'bg-emerald-950/50 border-emerald-500/80 text-emerald-100'
+                  : gate.isSelfReview
+                  ? 'bg-amber-950/50 border-amber-500/80 text-amber-100'
                   : 'bg-rose-950/50 border-rose-500/80 text-rose-100'
               }`}>
                 <div className="flex items-center space-x-2 font-bold font-mono text-sm">
                   {gate.isCorrect ? (
                     <>
                       <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                      <span>CORRECT DECISION (Choice {pyq.correctAnswer})</span>
+                      <span>CORRECT DECISION (Target: Choice {pyq.correctAnswer})</span>
+                    </>
+                  ) : gate.isSelfReview ? (
+                    <>
+                      <AlertTriangle className="w-5 h-5 text-amber-400" />
+                      <span>SELF-REVIEW REQUIRED (Your entry: "{gate.userAnswer}" | Target: Choice {pyq.correctAnswer})</span>
                     </>
                   ) : (
                     <>
                       <XCircle className="w-5 h-5 text-rose-400" />
-                      <span>INCORRECT DECISION (Your answer: {gate.userAnswer} | Correct: {pyq.correctAnswer})</span>
+                      <span>INCORRECT DECISION (Your answer: {gate.userAnswer} | Correct: Choice {pyq.correctAnswer})</span>
                     </>
                   )}
                 </div>
 
                 <div className="mt-2 text-xs leading-relaxed opacity-90 font-sans">
                   {gate.consequenceMessage}
+                </div>
+              </div>
+
+              {/* Reveal Options A-D Post-Commit */}
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-2">
+                <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                  Multiple-Choice Options & Target Answer:
+                </span>
+                <div className="grid grid-cols-1 gap-1.5 text-xs font-sans">
+                  {(['A', 'B', 'C', 'D'] as const).map((optKey) => {
+                    const isTarget = pyq.correctAnswer === optKey;
+                    return (
+                      <div
+                        key={optKey}
+                        className={`p-2 rounded-lg border flex items-start space-x-2 ${
+                          isTarget
+                            ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-200 font-semibold'
+                            : 'bg-slate-900 border-slate-800 text-slate-400'
+                        }`}
+                      >
+                        <span className="font-mono font-bold">{optKey}:</span>
+                        <span>{pyq.options[optKey]}</span>
+                        {isTarget && <span className="ml-auto text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 rounded font-mono font-bold">Target</span>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

@@ -7,8 +7,10 @@ import { ScorecardView } from './components/ScorecardView';
 import { PromptReferenceModal } from './components/PromptReferenceModal';
 import { CaseSession, CaseMode, PYQItem } from './types';
 import { DEFAULT_PYQ_INDEX } from './data/defaultQBank';
-import { generateNewCaseOffline, processTurnOffline, generateScorecardOffline } from './utils/ccsEngine';
+import { processTurnOffline, generateScorecard } from './utils/ccsEngine';
+import { buildCaseSessionFromScaffold } from './utils/caseBinder';
 import { parseRawQBankTextOffline } from './utils/qbankParser';
+import { saveActiveSession, loadActiveSession, saveQBankIndex, loadQBankIndex, saveCompletedCase, getMissedQIDsFromHistory } from './utils/storage';
 import { Sparkles, Activity, Layers, Award, BookOpen, AlertCircle, Play, ShieldAlert, WifiOff } from 'lucide-react';
 
 export default function App() {
@@ -21,18 +23,8 @@ export default function App() {
     }
   });
 
-  const [pyqList, setPyqList] = useState<PYQItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('medtrix_pyq_index');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {
-      // fallback
-    }
-    return DEFAULT_PYQ_INDEX;
-  });
+  const [pyqList, setPyqList] = useState<PYQItem[]>(DEFAULT_PYQ_INDEX);
+  const [isLoadingQBank, setIsLoadingQBank] = useState(true);
 
   const [activeTab, setActiveTab] = useState<'sim' | 'qbank' | 'scorecard' | 'instructions'>('sim');
   const [isStarting, setIsStarting] = useState(false);
@@ -40,14 +32,53 @@ export default function App() {
   const [isParsingIndex, setIsParsingIndex] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Save pyqList to localStorage when updated
+  // Load active session on mount
   useEffect(() => {
-    try {
-      localStorage.setItem('medtrix_pyq_index', JSON.stringify(pyqList));
-    } catch (e) {
-      console.warn('Could not save PYQ index to localStorage:', e);
+    async function initSession() {
+      const active = await loadActiveSession();
+      if (active) setSession(active);
     }
-  }, [pyqList]);
+    initSession();
+  }, []);
+
+  // Initialize QBank from IndexedDB or static offline index bundle
+  useEffect(() => {
+    async function initQBank() {
+      setIsLoadingQBank(true);
+      try {
+        const storedIndex = await loadQBankIndex();
+        if (storedIndex && storedIndex.length > 50) {
+          setPyqList(storedIndex);
+          setIsLoadingQBank(false);
+          return;
+        }
+
+        // Try loading pre-built offline bundle from public/pyq-index/
+        const manifestRes = await fetch('/pyq-index/manifest.json');
+        if (manifestRes.ok) {
+          const manifest = await manifestRes.json();
+          let allItems: PYQItem[] = [];
+          for (const sub of manifest.subjects || []) {
+            const safeName = sub.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const subRes = await fetch(`/pyq-index/subject_${safeName}.json`);
+            if (subRes.ok) {
+              const subItems: PYQItem[] = await subRes.json();
+              allItems = allItems.concat(subItems);
+            }
+          }
+          if (allItems.length > 0) {
+            setPyqList(allItems);
+            await saveQBankIndex(allItems);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load pre-built offline QBank bundle:', err);
+      } finally {
+        setIsLoadingQBank(false);
+      }
+    }
+    initQBank();
+  }, []);
 
   // Save active session to localStorage when updated
   useEffect(() => {
@@ -63,12 +94,18 @@ export default function App() {
   }, [session]);
 
   // Handler to start a new offline case
-  const handleStartNewCase = (mode: CaseMode = 'standard', subject: string = 'Medicine', blindMode: boolean = false) => {
+  const handleStartNewCase = async (mode: CaseMode = 'standard', subject: string = 'Medicine', blindMode: boolean = false) => {
     setIsStarting(true);
     setErrorMessage(null);
     try {
-      const newSession = generateNewCaseOffline(mode, subject, pyqList, blindMode);
+      const missedQIDs = await getMissedQIDsFromHistory();
+      const newSession = buildCaseSessionFromScaffold(pyqList, {
+        mode: blindMode ? 'blind' : mode,
+        subject,
+        missedQIDs,
+      });
       setSession(newSession);
+      await saveActiveSession(newSession);
       setActiveTab('sim');
     } catch (err: any) {
       console.error('Failed to start case offline:', err);
@@ -79,7 +116,7 @@ export default function App() {
   };
 
   // Handler to process command turn offline
-  const handleSendCommand = (command: string) => {
+  const handleSendCommand = async (command: string) => {
     if (!session || isProcessing) return;
     setIsProcessing(true);
     setErrorMessage(null);
@@ -87,6 +124,7 @@ export default function App() {
     try {
       const updated = processTurnOffline(session, command);
       setSession(updated);
+      await saveActiveSession(updated);
     } catch (err: any) {
       console.error('Failed to process turn offline:', err);
       setErrorMessage('Failed to process command in offline engine.');
@@ -96,14 +134,15 @@ export default function App() {
   };
 
   // Handler to submit Decision Gate Answer offline
-  const handleCommitGateAnswer = (answer: string) => {
+  const handleCommitGateAnswer = async (answer: string, gateIndex?: number) => {
     if (!session || isProcessing) return;
     setIsProcessing(true);
     setErrorMessage(null);
 
     try {
-      const updated = processTurnOffline(session, undefined, answer);
+      const updated = processTurnOffline(session, undefined, answer, gateIndex);
       setSession(updated);
+      await saveActiveSession(updated);
     } catch (err: any) {
       console.error('Failed to commit gate answer offline:', err);
       setErrorMessage('Failed to process gate answer in offline engine.');
@@ -113,14 +152,20 @@ export default function App() {
   };
 
   // Handler to End and Score Case offline
-  const handleEndCase = (currentSess?: CaseSession) => {
+  const handleEndCase = async (currentSess?: CaseSession) => {
     const targetSession = currentSess || session;
     if (!targetSession) return;
     setIsProcessing(true);
 
     try {
-      const scoredSession = generateScorecardOffline(targetSession);
+      const scorecard = generateScorecard(targetSession);
+      const scoredSession: CaseSession = {
+        ...targetSession,
+        status: 'completed',
+        scorecard,
+      };
       setSession(scoredSession);
+      await saveCompletedCase(scoredSession);
       setActiveTab('scorecard');
     } catch (err: any) {
       console.error('Failed to generate scorecard offline:', err);
@@ -135,9 +180,10 @@ export default function App() {
     setIsParsingIndex(true);
     setErrorMessage(null);
     try {
-      const parsedItems = parseRawQBankTextOffline(rawText);
-      if (parsedItems && parsedItems.length > 0) {
-        setPyqList((prev) => [...parsedItems, ...prev]);
+      const result = parseRawQBankTextOffline(rawText, pyqList);
+      if (result && result.parsedItems.length > 0) {
+        setPyqList((prev) => [...result.parsedItems, ...prev]);
+        await saveQBankIndex([...result.parsedItems, ...pyqList]);
       } else {
         setErrorMessage('No valid question patterns found in raw text snippet.');
       }
@@ -284,6 +330,7 @@ export default function App() {
                 onUpdatePyqList={setPyqList}
                 onParseRawText={handleParseRawText}
                 isParsing={isParsingIndex}
+                isCaseActive={session?.status === 'active'}
               />
             )}
 
