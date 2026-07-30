@@ -4,6 +4,15 @@ import { buildCaseSessionFromScaffold } from '../src/utils/caseBinder';
 import { exportQBankToJSON, importQBankFromJSON } from '../src/utils/qbankParser';
 import { DEFAULT_PYQ_INDEX } from '../src/data/defaultQBank';
 import { CASE_SCAFFOLDS } from '../src/data/cases/scaffolds';
+import {
+  rankForXp,
+  xpForGate,
+  computeGameStats,
+  hrSeverity,
+  spo2Severity,
+  bpSeverity,
+  tempSeverity,
+} from '../src/utils/gamification';
 import { CaseSession, PYQItem } from '../src/types';
 
 function runTests() {
@@ -129,6 +138,29 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
     }
   }
   assert(leaks === 0, 'No gate patientContext names its own diagnosis');
+
+  // 4c. Gamification maths
+  console.log('\n--- Test Suite 4c: Gamification ---');
+  assert(rankForXp(0).id === 'intern', 'Zero XP is Intern');
+  assert(rankForXp(250).id === 'resident', '250 XP is Resident');
+  assert(rankForXp(99999).id === 'professor', 'Very high XP caps at Professor');
+  assert(xpForGate(0) === 100, 'First correct gate is worth 100 XP');
+  assert(xpForGate(2) === 150, 'Third consecutive correct gate carries a streak bonus');
+
+  assert(hrSeverity(75) === 'normal', 'HR 75 is normal');
+  assert(hrSeverity(115) === 'warning', 'HR 115 is a warning');
+  assert(hrSeverity(140) === 'critical', 'HR 140 is critical');
+  assert(spo2Severity(88) === 'critical', 'SpO2 88% is critical');
+  assert(bpSeverity('85/50') === 'critical', 'Systolic 85 is critical');
+  assert(bpSeverity('120/80') === 'normal', 'BP 120/80 is normal');
+  // Temperature must work in either unit, since scaffolds use both.
+  assert(tempSeverity('39.8°C') === 'critical', '39.8 C is critical');
+  assert(tempSeverity('103.6°F') === 'critical', '103.6 F is critical (converted)');
+  assert(tempSeverity('37.0°C') === 'normal', '37.0 C is normal');
+
+  const gamified = computeGameStats(session);
+  assert(gamified.xp >= 0 && gamified.gatesTotal === session.decisionGates.length, 'Game stats derive from the session');
+  assert(gamified.badges.length > 0, 'Badge list is produced');
 
   // 5. JSON Import & Export Test
   console.log('\n--- Test Suite 5: Import & Export Integrity ---');

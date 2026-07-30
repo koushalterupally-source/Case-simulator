@@ -7,6 +7,8 @@ interface DecisionGateModalProps {
   onCommitAnswer: (answer: string) => void;
   onClose: () => void;
   blindMode?: boolean;
+  /** XP earned at this gate, including any streak bonus. 0 if wrong/unanswered. */
+  xpAwarded?: number;
 }
 
 export const DecisionGateModal: React.FC<DecisionGateModalProps> = ({
@@ -14,6 +16,7 @@ export const DecisionGateModal: React.FC<DecisionGateModalProps> = ({
   onCommitAnswer,
   onClose,
   blindMode = false,
+  xpAwarded = 0,
 }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [freeTextAnswer, setFreeTextAnswer] = useState('');
@@ -122,13 +125,13 @@ export const DecisionGateModal: React.FC<DecisionGateModalProps> = ({
                       <button
                         key={key}
                         onClick={() => setSelectedOption(key)}
-                        className={`w-full text-left p-3.5 rounded-xl border transition flex items-start space-x-3 text-sm cursor-pointer ${
+                        className={`w-full text-left p-3.5 rounded-xl border transition-all duration-150 flex items-start space-x-3 text-sm cursor-pointer active:scale-[0.99] ${
                           isSelected
-                            ? 'bg-amber-500/20 border-amber-500 text-white shadow-md'
-                            : 'bg-slate-950/60 border-slate-800 text-slate-200 hover:bg-slate-800/80 hover:border-slate-700'
+                            ? 'bg-amber-500/20 border-amber-500 text-white shadow-lg shadow-amber-500/20 scale-[1.01] ring-1 ring-amber-400/40'
+                            : 'bg-slate-950/60 border-slate-800 text-slate-200 hover:bg-slate-800/80 hover:border-slate-600 hover:translate-x-0.5'
                         }`}
                       >
-                        <span className={`font-mono font-bold px-2 py-0.5 rounded text-xs ${
+                        <span className={`font-mono font-bold px-2 py-0.5 rounded text-xs transition-colors ${
                           isSelected ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-400'
                         }`}>
                           {key}
@@ -179,6 +182,21 @@ export const DecisionGateModal: React.FC<DecisionGateModalProps> = ({
                     </>
                   )}
                 </div>
+
+                {/* XP reward reveal */}
+                {gate.isCorrect && !!xpAwarded && (
+                  <div className="mt-3 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <span className="inline-flex items-center gap-1.5 bg-amber-500/20 border border-amber-400/60 text-amber-200 font-mono font-bold text-sm px-3 py-1.5 rounded-xl shadow-lg shadow-amber-500/20">
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      +{xpAwarded} XP
+                    </span>
+                    {xpAwarded > 100 && (
+                      <span className="text-[11px] font-mono text-orange-300">
+                        streak bonus +{xpAwarded - 100}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-2 text-xs leading-relaxed opacity-90 font-sans">
                   {gate.consequenceMessage}

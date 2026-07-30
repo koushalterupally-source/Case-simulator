@@ -264,7 +264,7 @@ export default function App() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left max-w-3xl mx-auto">
               <div
                 onClick={() => handleStartNewCase('standard', 'Medicine')}
-                className="bg-slate-900 border border-slate-800 hover:border-indigo-500/60 p-5 rounded-2xl cursor-pointer transition group shadow-lg"
+                className="bg-slate-900 border border-slate-800 hover:border-indigo-500 p-5 rounded-2xl cursor-pointer transition-all duration-200 group shadow-lg hover:shadow-indigo-500/20 hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
               >
                 <div className="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center mb-3 group-hover:scale-110 transition">
                   <Activity className="w-5 h-5" />
@@ -277,7 +277,7 @@ export default function App() {
 
               <div
                 onClick={() => handleStartNewCase('rapid', 'Medicine')}
-                className="bg-slate-900 border border-slate-800 hover:border-cyan-500/60 p-5 rounded-2xl cursor-pointer transition group shadow-lg"
+                className="bg-slate-900 border border-slate-800 hover:border-cyan-500 p-5 rounded-2xl cursor-pointer transition-all duration-200 group shadow-lg hover:shadow-cyan-500/20 hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
               >
                 <div className="w-10 h-10 rounded-xl bg-cyan-600/20 text-cyan-400 flex items-center justify-center mb-3 group-hover:scale-110 transition">
                   <Play className="w-5 h-5" />
@@ -290,7 +290,7 @@ export default function App() {
 
               <div
                 onClick={() => handleStartNewCase('standard', 'Mixed', true)}
-                className="bg-slate-900 border border-slate-800 hover:border-amber-500/60 p-5 rounded-2xl cursor-pointer transition group shadow-lg"
+                className="bg-slate-900 border border-slate-800 hover:border-amber-500 p-5 rounded-2xl cursor-pointer transition-all duration-200 group shadow-lg hover:shadow-amber-500/20 hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
               >
                 <div className="w-10 h-10 rounded-xl bg-amber-600/20 text-amber-400 flex items-center justify-center mb-3 group-hover:scale-110 transition">
                   <ShieldAlert className="w-5 h-5" />
@@ -306,7 +306,7 @@ export default function App() {
               <button
                 onClick={() => handleStartNewCase('standard', 'Medicine')}
                 disabled={isStarting}
-                className="bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-bold px-8 py-3.5 rounded-xl shadow-xl transition inline-flex items-center space-x-2 text-sm disabled:opacity-50 cursor-pointer"
+                className="bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-bold px-8 py-3.5 rounded-xl shadow-xl shadow-indigo-500/25 transition-all duration-200 inline-flex items-center space-x-2 text-sm disabled:opacity-50 cursor-pointer hover:scale-105 active:scale-95 hover:shadow-indigo-500/40"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>{isStarting ? 'Building Clinical Case...' : 'Start Random Case Now'}</span>

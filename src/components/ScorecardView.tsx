@@ -1,6 +1,7 @@
 import React from 'react';
-import { Award, CheckCircle2, AlertTriangle, Clock, ShieldAlert, BookOpen, Sparkles, RefreshCw, Layers } from 'lucide-react';
+import { Award, CheckCircle2, AlertTriangle, Clock, ShieldAlert, BookOpen, Sparkles, RefreshCw, Layers, Trophy } from 'lucide-react';
 import { EndOfCaseScorecard, CaseSession } from '../types';
+import { computeGameStats } from '../utils/gamification';
 
 interface ScorecardViewProps {
   session: CaseSession;
@@ -61,6 +62,64 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({ session, onRestart
           </div>
         </div>
       </div>
+
+      {/* Run rewards: XP earned, rank reached, badges unlocked */}
+      {(() => {
+        const stats = computeGameStats(session);
+        return (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold font-mono text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                <Trophy className="w-4 h-4" /> Run Rewards
+              </h3>
+              <div className="flex items-center gap-2">
+                <span className={`font-mono font-bold text-sm ${stats.rank.tone}`}>{stats.rank.label}</span>
+                <span className="bg-amber-500/20 border border-amber-400/50 text-amber-200 font-mono font-bold text-sm px-3 py-1 rounded-xl">
+                  {stats.xp} XP
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center font-mono">
+              {[
+                { label: 'Gates Correct', value: `${stats.gatesCorrect}/${stats.gatesTotal}`, tone: 'text-emerald-300' },
+                { label: 'Accuracy', value: `${stats.accuracy}%`, tone: 'text-indigo-300' },
+                { label: 'Best Streak', value: String(stats.bestStreak), tone: 'text-orange-300' },
+                { label: 'Incidentals', value: `${stats.incidentalsCaught}/${stats.incidentalsTotal}`, tone: 'text-cyan-300' },
+              ].map((tile) => (
+                <div key={tile.label} className="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                  <span className={`block text-xl font-extrabold ${tile.tone}`}>{tile.value}</span>
+                  <span className="block text-[10px] uppercase tracking-wider text-slate-500 mt-0.5">
+                    {tile.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-2">
+                Badges — {stats.badges.filter((b) => b.earned).length} of {stats.badges.length} unlocked
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {stats.badges.map((b) => (
+                  <span
+                    key={b.id}
+                    title={b.description}
+                    className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-bold px-2.5 py-1.5 rounded-lg border cursor-help transition ${
+                      b.earned
+                        ? 'bg-indigo-500/15 border-indigo-500/50 text-indigo-200'
+                        : 'bg-slate-950 border-slate-800 text-slate-600'
+                    }`}
+                  >
+                    <Trophy className={`w-3 h-3 ${b.earned ? 'text-amber-300' : 'text-slate-700'}`} />
+                    {b.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Grid Section: PYQ Score & Incidental Findings */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

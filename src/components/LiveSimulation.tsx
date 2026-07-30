@@ -19,6 +19,8 @@ import {
 import { CaseSession, OrderCategory } from '../types';
 import { CommandPanel } from './CommandPanel';
 import { DecisionGateModal } from './DecisionGateModal';
+import { CaseProgressBar } from './CaseProgressBar';
+import { xpAwardedForGate } from '../utils/gamification';
 
 interface LiveSimulationProps {
   session: CaseSession;
@@ -62,8 +64,14 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({
           }
           onClose={() => setActiveModalGateIndex(null)}
           blindMode={session.blindMode}
+          xpAwarded={
+            activeModalGateIndex !== null ? xpAwardedForGate(session, activeModalGateIndex) : 0
+          }
         />
       )}
+
+      {/* Case HUD: rank, XP, streak, stability and the clickable gate stepper */}
+      <CaseProgressBar session={session} onOpenGate={(idx) => setActiveModalGateIndex(idx)} />
 
       {/* Patient Overview Header Card */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
