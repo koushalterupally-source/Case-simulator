@@ -111,13 +111,13 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
             onChange={(e) => setInputText(e.target.value)}
             disabled={isProcessing || disabled}
             placeholder='e.g., order: STAT 12-lead ECG, Troponin I, Aspirin 300mg | hx: allergies | pe: chest exam'
-            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl py-3 pl-4 pr-28 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-50 font-sans"
+            className="w-full bg-slate-950 border border-slate-700/80 rounded-xl py-3 pl-4 pr-24 sm:pr-36 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-50 font-sans"
           />
 
           <button
             type="submit"
             disabled={!inputText.trim() || isProcessing || disabled}
-            className="absolute right-1.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-medium px-4 py-2 rounded-lg text-xs transition shadow flex items-center space-x-1.5 disabled:opacity-40 cursor-pointer"
+            className="absolute right-1.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-medium px-3 sm:px-4 py-2 rounded-lg text-xs transition shadow flex items-center space-x-1.5 disabled:opacity-40 cursor-pointer"
           >
             {isProcessing ? (
               <span className="flex items-center space-x-1">
@@ -126,7 +126,8 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
               </span>
             ) : (
               <>
-                <span>Execute Order</span>
+                <span className="hidden sm:inline">Execute Order</span>
+                <span className="sm:hidden">Run</span>
                 <Send className="w-3.5 h-3.5" />
               </>
             )}

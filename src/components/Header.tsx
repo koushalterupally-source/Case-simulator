@@ -31,23 +31,25 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="bg-slate-900 border-b border-slate-800 text-slate-100 sticky top-0 z-30 shadow-md">
       {/* Top Brand Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <div className="bg-gradient-to-tr from-cyan-600 to-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20 text-white flex items-center justify-center">
-            <Activity className="w-6 h-6 animate-pulse" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-3 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+          <div className="bg-gradient-to-tr from-cyan-600 to-indigo-600 p-2 sm:p-2.5 rounded-xl shadow-lg shadow-indigo-500/20 text-white flex items-center justify-center shrink-0">
+            <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
           </div>
-          <div>
+          <div className="min-w-0">
+            {/* Badges and strapline are desktop-only: on a 360px phone they wrapped the
+                brand to three lines and pushed the sticky header past half the viewport. */}
             <div className="flex items-center space-x-2">
-              <h1 className="text-lg font-bold tracking-tight text-white font-mono">Medtrix PYQ CCS Engine</h1>
-              <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
+              <h1 className="text-sm sm:text-lg font-bold tracking-tight text-white font-mono truncate">Medtrix PYQ CCS Engine</h1>
+              <span className="hidden sm:inline-block bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
                 NEET-PG / INI-CET
               </span>
-              <span className="bg-emerald-950 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono flex items-center space-x-1">
+              <span className="hidden sm:flex bg-emerald-950 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono items-center space-x-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 <span>OFFLINE PWA READY</span>
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="hidden sm:block text-xs text-slate-400">
               Interactive USMLE-Step-3-Style Clinical Case Simulator Driven by Real PYQs
             </p>
           </div>
