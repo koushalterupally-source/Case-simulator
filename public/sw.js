@@ -2,7 +2,9 @@
 // hardcoding '/' and '/index.html' would cache the wrong URLs and the offline
 // fallback would 404. Derive the scope from where this file actually lives.
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
-const CACHE_NAME = 'pyq-ccs-v2';
+// Bump on every release that changes asset hashes — activate() deletes every
+// cache that isn't this one, which is what evicts a stale shell.
+const CACHE_NAME = 'pyq-ccs-v3';
 const OFFLINE_FALLBACK = BASE + 'index.html';
 // The hashed JS/CSS bundles are injected here at build time by the sw-precache
 // plugin in vite.config.ts. Without this they are only cached once the worker is
