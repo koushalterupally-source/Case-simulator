@@ -354,13 +354,32 @@ export function processTurnOffline(
   const allPlaced = [...updatedSession.completedOrders, ...updatedSession.pendingOrders];
   const totalElapsedMinutes = currentTotalMinutes - simTimeToMinutes({ day: 1, hour: 9, minute: 0 });
 
+  // An intervention counts as done if it was ordered directly OR delivered by
+  // answering the decision gate that represents it. Checking orders alone meant
+  // a player who answered every gate correctly still watched the patient
+  // deteriorate for treatment the narrative said they had already given.
+  const gateDelivered = updatedSession.decisionGates
+    .filter((g) => g.userAnswer !== undefined && g.isCorrect)
+    .map((g) => `${g.consequenceMessage || ''} ${g.patientContext || ''}`)
+    .join(' ');
+
   scaffold.criticalInterventions.forEach((critical) => {
-    const executed = allPlaced.some((o) => critical.orderOrActionPattern.test(o.orderName));
+    const executed =
+      allPlaced.some((o) => critical.orderOrActionPattern.test(o.orderName)) ||
+      critical.orderOrActionPattern.test(gateDelivered);
+
+    // Warn once, when it first goes overdue — not on every turn forever.
+    const alreadyWarned = updatedSession.turns.some((t) =>
+      (t.whatHappened || '').includes(critical.name.toLowerCase())
+    );
+
     if (!executed && totalElapsedMinutes > critical.targetMilestoneMinutes) {
       // Deteriorate vitals!
       updatedSession.patient.currentVitals.hr = Math.min(180, updatedSession.patient.currentVitals.hr + 4);
       updatedSession.patient.currentVitals.spo2 = Math.max(70, updatedSession.patient.currentVitals.spo2 - 2);
-      narrative += `\n\nThe patient is deteriorating: ${critical.name.toLowerCase()} is now overdue against a ${critical.targetMilestoneMinutes}-minute window. Heart rate is climbing and oxygenation is falling.`;
+      if (!alreadyWarned) {
+        narrative += `\n\nThe patient is deteriorating: ${critical.name.toLowerCase()} is now overdue against a ${critical.targetMilestoneMinutes}-minute window. Heart rate is climbing and oxygenation is falling.`;
+      }
     } else if (executed) {
       // Improve vitals
       updatedSession.patient.currentVitals.hr = Math.max(72, updatedSession.patient.currentVitals.hr - 2);

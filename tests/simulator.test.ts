@@ -88,8 +88,18 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
     },
   ];
 
-  const session = buildCaseSessionFromScaffold(mockPyqs, { mode: 'standard', subject: 'Medicine' });
+  // Pin the scaffold: gates now require the question to be topically about the
+  // patient's condition, so a STEMI question only binds into a STEMI case.
+  const session = buildCaseSessionFromScaffold(mockPyqs, { mode: 'standard', scaffoldId: 'scaffold_stemi' });
   assert(session.decisionGates.length > 0, 'Decision gates bound from scaffolds & PYQ index');
+
+  // And the inverse: an unrelated case must NOT bind this question at all.
+  const unrelated = buildCaseSessionFromScaffold(mockPyqs, { mode: 'standard', scaffoldId: 'scaffold_meningitis' });
+  assert(unrelated.decisionGates.length === 0, 'A STEMI question does not bind into a meningitis case');
+
+  // No case may present the same question twice.
+  const qids = session.decisionGates.map((g) => g.pyq.qid);
+  assert(qids.length === new Set(qids).size, 'No question repeats within a single case');
 
   const gate0 = session.decisionGates[0];
   assert(gate0.userAnswer === undefined, 'Uncommitted gate has undefined userAnswer');
@@ -101,7 +111,7 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
   assert(updatedSess.decisionGates[0].userAnswer === targetAnswer, 'User answer recorded against gate 0');
 
   // Test blind mode synonym matching
-  const blindSess = buildCaseSessionFromScaffold(mockPyqs, { mode: 'blind', subject: 'Medicine' });
+  const blindSess = buildCaseSessionFromScaffold(mockPyqs, { mode: 'blind', scaffoldId: 'scaffold_stemi' });
   const blindUpdated = processTurnOffline(blindSess, undefined, 'aspirin and plavix', 0);
   assert(blindUpdated.decisionGates[0].isCorrect === true, 'Blind mode synonym match "aspirin and plavix" graded correct');
 

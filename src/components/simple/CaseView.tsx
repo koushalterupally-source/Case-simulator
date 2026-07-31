@@ -83,6 +83,31 @@ export const CaseView: React.FC<CaseViewProps> = ({
 
       <main className="flex-1 px-4">
         <div className="max-w-[46rem] mx-auto pt-8">
+          {/* Be honest when the loaded bank cannot supply questions for this
+              patient. Silently running a "PYQ-driven" case with no PYQs, or
+              with one, is the kind of thing that makes the app feel broken. */}
+          {stats.gatesTotal < (session.mode === 'rapid' ? 3 : 5) && (
+            <div
+              className="mb-7 rounded-xl px-4 py-3 text-[13px] leading-relaxed"
+              style={{ background: 'var(--warn-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}
+            >
+              {stats.gatesTotal === 0 ? (
+                <>
+                  Your question bank has nothing on this presentation, so this case has{' '}
+                  <strong>no decision gates</strong> — it will play as a simulation only. Load the
+                  full question index to get real questions here.
+                </>
+              ) : (
+                <>
+                  Only {stats.gatesTotal} question{stats.gatesTotal === 1 ? '' : 's'} in your bank
+                  matched this presentation, so this case has {stats.gatesTotal} decision
+                  {stats.gatesTotal === 1 ? '' : 's'} instead of {session.mode === 'rapid' ? 3 : 5}.
+                  Load the full index for more.
+                </>
+              )}
+            </div>
+          )}
+
           <Transcript session={session}>
             {shownGate && (
               <GateCard
