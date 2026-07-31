@@ -124,6 +124,52 @@ function matchBlindAnswer(
 }
 
 /**
+ * Splits a multi-order command into individual orders.
+ *
+ * Commas inside brackets are part of the order's name, not separators —
+ * "RFT / KFT (urea, creatinine)" is one investigation, and a naive split turned
+ * it into "RFT / KFT (urea" and "creatinine)".
+ */
+export function splitOrders(block: string): string[] {
+  const out: string[] = [];
+  let current = '';
+  let depth = 0;
+
+  for (const ch of block) {
+    if (ch === '(' || ch === '[') depth++;
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1);
+
+    if (depth === 0 && (ch === ',' || ch === ';' || ch === '\n')) {
+      out.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  out.push(current);
+
+  return out.map((s) => s.trim()).filter(Boolean);
+}
+
+/** Best-effort category for an order the scaffold does not model. */
+export function inferOrderCategory(name: string): OrderResultItem['category'] {
+  const n = name.toLowerCase();
+  if (/\b(ecg|ekg|monitoring|oximetry|nibp|telemetry|charting)\b/.test(n)) return 'monitoring';
+  if (/\b(x-?ray|cxr|usg|ultrasound|ct|ctpa|mri|mra|echo|doppler|angiography|scan|fast)\b/.test(n))
+    return 'imaging';
+  if (/\b(consult|refer|referral)\b/.test(n)) return 'consults';
+  if (
+    /\b(intubation|ventilation|cannula|catheter|catheterisation|line|drain|decompression|puncture|tap|cpr|defibrillation|cardioversion|endoscopy|laparotomy|pci|dialysis|pericardiocentesis)\b/.test(n)
+  )
+    return 'procedures';
+  if (
+    /\b(mg|mcg|gram|infusion|bolus|iv|oral|nebulisation|nebulization|saline|dextrose|ringer|lactate|resomal|ors|plasma|platelet|cells|cryoprecipitate|oxygen|prophylaxis)\b/.test(n)
+  )
+    return 'drugs';
+  return 'labs';
+}
+
+/**
  * Main Offline Simulation Turn Engine
  */
 export function processTurnOffline(
@@ -258,65 +304,73 @@ export function processTurnOffline(
     }
     // Command: order: <investigation/drug>
     else if (cmdLower.startsWith('order:') || cmdLower.startsWith('give') || cmdLower.startsWith('start') || cmdLower.startsWith('administer') || cmdLower.startsWith('order')) {
-      const orderName = userCommand.replace(/^(?:order\:|give|start|administer|order)\s*/i, '').trim();
-      timeSpentMins = 5;
+      const orderBlock = userCommand.replace(/^(?:order\:|give|start|administer|order)\s*/i, '').trim();
 
-      // Look up order in scaffold investigations map
-      const orderLower = orderName.toLowerCase();
-      let matchedKey: string | null = null;
+      // One command can carry several orders — the order sheet sends them
+      // comma-separated, and a doctor writing them out does the same. Each gets
+      // its own result and its own turnaround, rather than being filed as a
+      // single order literally named "CBC, chest x-ray".
+      const orderNames = splitOrders(orderBlock);
 
-      for (const key of Object.keys(scaffold.investigationsMap)) {
-        if (orderLower.includes(key) || key.includes(orderLower)) {
-          matchedKey = key;
-          break;
-        }
-      }
+      timeSpentMins = Math.min(15, 2 + orderNames.length);
+      const placedLines: string[] = [];
 
-      let resultText = '';
-      let turnaround = 15;
-      let category: any = 'labs';
-      let isIndicative = false;
+      for (const orderName of orderNames) {
+        const orderLower = orderName.toLowerCase();
+        let matchedKey: string | null = null;
 
-      if (matchedKey) {
-        const item = scaffold.investigationsMap[matchedKey];
-        resultText = item.resultText;
-        turnaround = item.turnaroundMinutes;
-        category = item.category;
-        isIndicative = item.isIndicative;
-      } else {
-        // Not modeled in scaffold - express honestly!
-        resultText = `Result for "${orderName}": Not modeled in this specific clinical case scenario.`;
-        turnaround = 20;
-        category = 'labs';
-        isIndicative = false;
-      }
-
-      const readySimTimeObj = addMinutesToSimTime(updatedSession.simTime, turnaround);
-      const readySimTimeStr = formatSimTime(readySimTimeObj);
-
-      const newOrder: OrderResultItem = {
-        id: `ord_${Date.now()}_${Math.random()}`,
-        orderName,
-        category,
-        placedSimTime: formatSimTime(updatedSession.simTime),
-        readySimTime: readySimTimeStr,
-        isReady: false,
-        resultText,
-        turnaroundMinutes: turnaround,
-      };
-
-      updatedSession.pendingOrders.push(newOrder);
-
-      // Check incidental finding triggers
-      updatedSession.incidentalFindings.forEach((inc) => {
-        if (inc.status === 'unnoticed') {
-          if (orderLower.includes('usg') || orderLower.includes('ultrasound') || orderLower.includes('ct') || orderLower.includes('cxr') || orderLower.includes('xray') || orderLower.includes('vaccine') || orderLower.includes('tdap')) {
-            inc.status = 'noticed_addressed';
+        for (const key of Object.keys(scaffold.investigationsMap)) {
+          if (orderLower.includes(key) || key.includes(orderLower)) {
+            matchedKey = key;
+            break;
           }
         }
-      });
 
-      narrative = `Order placed: "${orderName}". Turnaround time: ${turnaround} mins (Ready @ ${readySimTimeStr}).`;
+        let resultText = '';
+        let turnaround = 15;
+        let category: any = 'labs';
+
+        if (matchedKey) {
+          const item = scaffold.investigationsMap[matchedKey];
+          resultText = item.resultText;
+          turnaround = item.turnaroundMinutes;
+          category = item.category;
+        } else {
+          // Not modelled in this scaffold — say so rather than inventing a
+          // normal result.
+          resultText = `Not modelled in this case.`;
+          turnaround = 20;
+          category = inferOrderCategory(orderName);
+        }
+
+        const readySimTimeStr = formatSimTime(addMinutesToSimTime(updatedSession.simTime, turnaround));
+
+        updatedSession.pendingOrders.push({
+          id: `ord_${Date.now()}_${Math.random()}`,
+          orderName,
+          category,
+          placedSimTime: formatSimTime(updatedSession.simTime),
+          readySimTime: readySimTimeStr,
+          isReady: false,
+          resultText,
+          turnaroundMinutes: turnaround,
+        });
+
+        placedLines.push(`${orderName} — ready ${readySimTimeStr}`);
+
+        updatedSession.incidentalFindings.forEach((inc) => {
+          if (inc.status === 'unnoticed') {
+            if (/\b(usg|ultrasound|ct|cxr|x-?ray|mri|echo|vaccine|tdap|hemogram|cbc|tft|ferritin)\b/i.test(orderLower)) {
+              inc.status = 'noticed_addressed';
+            }
+          }
+        });
+      }
+
+      narrative =
+        orderNames.length === 1
+          ? `Ordered ${placedLines[0]}.`
+          : `${orderNames.length} orders placed:\n${placedLines.map((l) => `• ${l}`).join('\n')}`;
     }
     else {
       narrative = `Command executed: "${userCommand}". Clinical notes recorded.`;

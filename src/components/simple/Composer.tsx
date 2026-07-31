@@ -2,19 +2,20 @@ import React from 'react';
 
 interface ComposerProps {
   onSend: (command: string) => void;
+  onOpenOrders: () => void;
   disabled?: boolean;
   busy?: boolean;
 }
 
-/** Common openers, shown only when the field is empty so they never nag. */
+/** Quick actions that don't warrant opening the sheet. */
 const SUGGESTIONS = [
-  { label: 'History & exam', cmd: 'hx: full history and physical examination' },
-  { label: 'Bloods', cmd: 'order: CBC, electrolytes, creatinine, glucose' },
   { label: 'ECG', cmd: 'order: 12-lead ECG' },
+  { label: 'ABG', cmd: 'order: ABG' },
+  { label: 'Recheck vitals', cmd: 'pe: Vitals recheck' },
   { label: 'Wait 30 min', cmd: 'advance 30 minutes' },
 ];
 
-export const Composer: React.FC<ComposerProps> = ({ onSend, disabled, busy }) => {
+export const Composer: React.FC<ComposerProps> = ({ onSend, onOpenOrders, disabled, busy }) => {
   const [text, setText] = React.useState('');
   const [showHelp, setShowHelp] = React.useState(false);
   const ref = React.useRef<HTMLTextAreaElement>(null);
@@ -62,7 +63,7 @@ export const Composer: React.FC<ComposerProps> = ({ onSend, disabled, busy }) =>
       )}
 
       {!text && (
-        <div className="flex flex-wrap gap-2 mb-2.5">
+        <div className="flex flex-wrap items-center gap-2 mb-2.5">
           {SUGGESTIONS.map((s) => (
             <button
               key={s.label}
@@ -78,6 +79,13 @@ export const Composer: React.FC<ComposerProps> = ({ onSend, disabled, busy }) =>
               {s.label}
             </button>
           ))}
+          <button
+            onClick={() => setShowHelp((v) => !v)}
+            className="rounded-full px-2.5 py-1.5 text-[13px] ring-focus"
+            style={{ color: 'var(--text-faint)' }}
+          >
+            {showHelp ? 'Hide typing tips' : 'Typing tips'}
+          </button>
         </div>
       )}
 
@@ -86,12 +94,14 @@ export const Composer: React.FC<ComposerProps> = ({ onSend, disabled, busy }) =>
         style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)' }}
       >
         <button
-          onClick={() => setShowHelp((v) => !v)}
-          aria-label="Command help"
-          className="shrink-0 w-8 h-8 rounded-full text-[15px] ring-focus"
-          style={{ color: 'var(--text-faint)' }}
+          onClick={onOpenOrders}
+          disabled={disabled}
+          aria-label="Open order sheet"
+          title="Orders, history and examination"
+          className="shrink-0 h-8 px-3 rounded-full text-[13px] font-medium ring-focus disabled:opacity-40"
+          style={{ background: 'var(--surface-sunken)', color: 'var(--text)' }}
         >
-          ?
+          + Orders
         </button>
 
         <textarea

@@ -2,6 +2,7 @@ import React from 'react';
 import { CaseSession } from '../../types';
 import { Transcript } from './Transcript';
 import { Composer } from './Composer';
+import { OrderSheet } from './OrderSheet';
 import { GateCard } from './GateCard';
 import { computeGameStats, xpAwardedForGate } from '../../utils/gamification';
 
@@ -39,9 +40,15 @@ export const CaseView: React.FC<CaseViewProps> = ({
       : null;
 
   const done = session.status === 'completed';
+  const [ordersOpen, setOrdersOpen] = React.useState(false);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
+      <OrderSheet
+        open={ordersOpen}
+        onClose={() => setOrdersOpen(false)}
+        onSubmit={onSendCommand}
+      />
       {/* Thin bar: progress and one action. Nothing else. */}
       <header
         className="sticky top-0 z-10 px-4"
@@ -130,7 +137,12 @@ export const CaseView: React.FC<CaseViewProps> = ({
           {/* Composer is hidden while a gate is awaiting an answer: the case is
               frozen at that decision, so an order box would be a dead end. */}
           {!activeGate || activeGate.userAnswer !== undefined ? (
-            <Composer onSend={onSendCommand} disabled={done} busy={isProcessing} />
+            <Composer
+              onSend={onSendCommand}
+              onOpenOrders={() => setOrdersOpen(true)}
+              disabled={done}
+              busy={isProcessing}
+            />
           ) : (
             <div className="h-8" />
           )}

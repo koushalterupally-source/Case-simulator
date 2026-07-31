@@ -1,5 +1,5 @@
 import { parseRawQBankTextOffline } from '../src/utils/qbankParser';
-import { addMinutesToSimTime, processTurnOffline, generateScorecard } from '../src/utils/ccsEngine';
+import { addMinutesToSimTime, processTurnOffline, generateScorecard, splitOrders, inferOrderCategory } from '../src/utils/ccsEngine';
 import { buildCaseSessionFromScaffold } from '../src/utils/caseBinder';
 import { exportQBankToJSON, importQBankFromJSON } from '../src/utils/qbankParser';
 import { DEFAULT_PYQ_INDEX } from '../src/data/defaultQBank';
@@ -196,6 +196,28 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
     });
   });
   assert(!leakFound, 'No gate patientContext names its diagnosis (word-boundary check)');
+
+  // 4d. Order sheet: multi-order commands
+  console.log('\n--- Test Suite 4d: Order Entry ---');
+  assert(splitOrders('CBC, ABG, LFT').length === 3, 'Splits a comma-separated order list');
+  assert(
+    splitOrders('RFT / KFT (urea, creatinine), ABG').length === 2,
+    'Does not split on a comma inside brackets'
+  );
+  assert(
+    splitOrders('RFT / KFT (urea, creatinine), ABG')[0] === 'RFT / KFT (urea, creatinine)',
+    'Keeps the bracketed order name intact'
+  );
+  assert(splitOrders('  ECG  ').length === 1, 'Trims a single order');
+  assert(inferOrderCategory('Chest X-ray portable') === 'imaging', 'X-ray is imaging');
+  assert(inferOrderCategory('12-lead ECG') === 'monitoring', 'ECG is monitoring');
+  assert(inferOrderCategory('Normal saline 0.9% 500 mL bolus') === 'drugs', 'Saline bolus is a drug/fluid');
+  assert(inferOrderCategory('Cardiology consult') === 'consults', 'Consult is a consult');
+  assert(inferOrderCategory('Endotracheal intubation') === 'procedures', 'Intubation is a procedure');
+  assert(inferOrderCategory('Serum ferritin') === 'labs', 'Ferritin is a lab');
+
+  const orderSess = processTurnOffline(session, 'order: CBC / Hemogram, ABG, Chest X-ray portable');
+  assert(orderSess.pendingOrders.length === 3, 'Three separate orders are queued from one command');
 
   // 5. JSON Import & Export Test
   console.log('\n--- Test Suite 5: Import & Export Integrity ---');
