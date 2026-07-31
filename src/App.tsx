@@ -53,14 +53,17 @@ export default function App() {
           return;
         }
 
-        // Try loading pre-built offline bundle from public/pyq-index/
-        const manifestRes = await fetch('/pyq-index/manifest.json');
+        // Try loading pre-built offline bundle from public/pyq-index/.
+        // Must go through BASE_URL: on GitHub Pages the app is served from
+        // /<repo>/, so a root-absolute path 404s.
+        const base = import.meta.env.BASE_URL;
+        const manifestRes = await fetch(`${base}pyq-index/manifest.json`);
         if (manifestRes.ok) {
           const manifest = await manifestRes.json();
           let allItems: PYQItem[] = [];
           for (const sub of manifest.subjects || []) {
             const safeName = sub.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const subRes = await fetch(`/pyq-index/subject_${safeName}.json`);
+            const subRes = await fetch(`${base}pyq-index/subject_${safeName}.json`);
             if (subRes.ok) {
               const subItems: PYQItem[] = await subRes.json();
               allItems = allItems.concat(subItems);

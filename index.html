@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a" />
     <meta name="description" content="Offline-first NEET-PG & INI-CET Clinical Case Simulation & PYQ QBank Engine" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234f46e5'/><path d='M30 50h40M50 30v40' stroke='white' stroke-width='10' stroke-linecap='round'/></svg>" />
     <title>PYQ CCS Case Simulator — NEET-PG & INI-CET Clinical Simulation</title>
   </head>
@@ -15,7 +15,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+          navigator.serviceWorker.register('%BASE_URL%sw.js').catch(() => {});
         });
       }
     </script>
