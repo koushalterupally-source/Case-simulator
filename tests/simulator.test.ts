@@ -130,7 +130,9 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
     for (const milestone of scaffold.gateMilestones) {
       const ctx = milestone.patientContext.toLowerCase();
       for (const term of terms) {
-        if (ctx.includes(term)) {
+        // Match on word boundaries, not substrings: "tension pneumothorax" must not
+        // fire on the word "hypotension", which is a sign the doctor can observe.
+        if (new RegExp(`\\b${term}\\b`).test(ctx)) {
           console.error(`   ↳ LEAK in ${scaffold.id}: "${term}" appears in patientContext`);
           leaks++;
         }
@@ -161,6 +163,29 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
   const gamified = computeGameStats(session);
   assert(gamified.xp >= 0 && gamified.gatesTotal === session.decisionGates.length, 'Game stats derive from the session');
   assert(gamified.badges.length > 0, 'Badge list is produced');
+
+  // Second, independent leak check using word boundaries rather than substrings.
+  // The two catch different things; both must hold.
+  let leakFound = false;
+  CASE_SCAFFOLDS.forEach((scaffold) => {
+    const condName = scaffold.conditionName.toLowerCase();
+    const keywords = condName
+      .split(/[\s\(\)\/]+/)
+      .map((w) => w.trim())
+      .filter((w) => w.length > 3 && !['acute', 'wall', 'severe', 'with', 'shock', 'young', 'post', 'type', 'gastroenterology'].includes(w));
+
+    scaffold.gateMilestones.forEach((gate, gIdx) => {
+      const ctx = gate.patientContext.toLowerCase();
+      keywords.forEach((kw) => {
+        const regex = new RegExp(`\\b${kw}\\b`, 'i');
+        if (regex.test(ctx)) {
+          leakFound = true;
+          console.error(`Leak detected in ${scaffold.id} gate ${gIdx}: keyword "${kw}" found in "${gate.patientContext}"`);
+        }
+      });
+    });
+  });
+  assert(!leakFound, 'No gate patientContext names its diagnosis (word-boundary check)');
 
   // 5. JSON Import & Export Test
   console.log('\n--- Test Suite 5: Import & Export Integrity ---');
