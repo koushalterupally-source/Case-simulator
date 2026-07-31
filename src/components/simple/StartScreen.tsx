@@ -3,6 +3,7 @@ import { CaseMode } from '../../types';
 
 interface StartScreenProps {
   onStart: (mode: CaseMode, subject: string, blind?: boolean) => void;
+  onStartQuestionLed: () => void;
   onOpenQBank: () => void;
   questionCount: number;
   loading?: boolean;
@@ -11,6 +12,7 @@ interface StartScreenProps {
 
 export const StartScreen: React.FC<StartScreenProps> = ({
   onStart,
+  onStartQuestionLed,
   onOpenQBank,
   questionCount,
   loading,
@@ -35,6 +37,15 @@ export const StartScreen: React.FC<StartScreenProps> = ({
             style={{ background: 'var(--accent)', color: '#fff' }}
           >
             {starting ? 'Preparing…' : 'Start a case'}
+          </button>
+
+          <button
+            onClick={onStartQuestionLed}
+            disabled={starting || loading}
+            className="w-full rounded-xl py-2.5 text-[14px] ring-focus disabled:opacity-50"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
+          >
+            Practise from your whole bank
           </button>
 
           <div className="flex gap-2.5">

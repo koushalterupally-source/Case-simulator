@@ -4,6 +4,7 @@ import { buildCaseSessionFromScaffold } from '../src/utils/caseBinder';
 import { exportQBankToJSON, importQBankFromJSON } from '../src/utils/qbankParser';
 import { DEFAULT_PYQ_INDEX } from '../src/data/defaultQBank';
 import { CASE_SCAFFOLDS } from '../src/data/cases/scaffolds';
+import { buildQuestionLedCase, buildIdf } from '../src/utils/questionLedCase';
 import {
   rankForXp,
   xpForGate,
@@ -218,6 +219,49 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
 
   const orderSess = processTurnOffline(session, 'order: CBC / Hemogram, ABG, Chest X-ray portable');
   assert(orderSess.pendingOrders.length === 3, 'Three separate orders are queued from one command');
+
+  // 4e. Question-led cases — the whole bank, not just the 12 authored conditions
+  console.log('\n--- Test Suite 4e: Question-Led Cases ---');
+  const bank: PYQItem[] = [];
+  for (let i = 0; i < 40; i++) {
+    bank.push({
+      qid: `Q${i}`, exam: 'NEET-PG', year: 2023,
+      subject: i % 2 ? 'Medicine' : 'Surgery',
+      system: i % 2 ? 'Cardiology' : 'Gastroenterology',
+      topic: '',
+      // Half share a rare term, half share nothing distinctive.
+      // Distinctive shared term, but genuinely different questions — near
+      // identical phrasings are rejected as duplicates, by design.
+      stem: i % 2
+        ? [
+            'Which enzyme is deficient in pheochromocytoma workup?',
+            'Preferred imaging modality for pheochromocytoma localisation?',
+            'Preoperative blockade of choice before pheochromocytoma surgery?',
+            'Which syndrome is pheochromocytoma associated with inheritance?',
+            'Urinary metabolite measured when pheochromocytoma suspected?',
+          ][Math.floor(i / 2) % 5] + ` (variant ${i})`
+        : `A patient has a common finding number ${i}. What next?`,
+      options: { A: `alpha ${i}`, B: `beta ${i}`, C: `gamma ${i}`, D: `delta ${i}` },
+      correctAnswer: 'A', conceptTested: '', roleTag: 'DIAGNOSIS',
+    } as PYQItem);
+  }
+  const idf = buildIdf(bank);
+  const qCase = buildQuestionLedCase(bank, { seed: 'T1', idf, seedQid: 'Q1' });
+  assert(qCase.isQuestionLed === true, 'Question-led case is flagged as such');
+  assert(qCase.decisionGates.length > 1, 'Question-led case gathers related questions');
+  assert(
+    qCase.decisionGates.every((g) => /pheochromocytoma/i.test(g.pyq.stem)),
+    'Only questions sharing distinctive vocabulary are gathered'
+  );
+  const qlQids = qCase.decisionGates.map((g) => g.pyq.qid);
+  assert(qlQids.length === new Set(qlQids).size, 'Question-led case never repeats a question');
+  assert(
+    qCase.decisionGates.every((g) => g.userAnswer === undefined),
+    'Question-led gates start uncommitted'
+  );
+  // A question-led case must not pretend to be a simulated patient.
+  assert(qCase.incidentalFindings.length === 0, 'Question-led case plants no fake incidental findings');
+  assert(qCase.patient.diagnosis === '', 'Question-led case claims no diagnosis');
 
   // 5. JSON Import & Export Test
   console.log('\n--- Test Suite 5: Import & Export Integrity ---');

@@ -35,6 +35,57 @@ const VALID_ROLES = new Set([
   'PHARM', 'COMPLICATION', 'PREVENTION', 'BASIC-SCIENCE',
 ]);
 
+/**
+ * The source classifier put 77% of everything in DIAGNOSIS, because that was
+ * both its broadest rule set and its fallback — which makes the
+ * EMERGENCY → DIAGNOSIS → INVESTIGATION → MANAGEMENT arc unbuildable. These
+ * rules are ordered most-specific-first and run over the stem AND the options,
+ * and anything genuinely unclear is tagged UNTAGGED rather than guessed.
+ */
+const ROLE_RULES: [string, RegExp][] = [
+  ['EMERGENCY', /\b(immediate|first step|initial step|emergency|resuscitat|life.?saving|cardiac arrest|shock|unstable|crash|stat\b)/i],
+  ['PREVENTION', /\b(vaccin|immunis|immuniz|prophyla|screening|prevent|counsel|contraindicated in pregnancy)\b/i],
+  ['PHARM', /\b(mechanism of action|adverse effect|side effect|toxicity|antidote|contraindicat|half.?life|drug of choice|dose|dosage|pharmacokinet|pharmacodynam)\b/i],
+  ['COMPLICATION', /\b(complication|sequel|prognos|mortality|recurrence|long.?term effect|late effect)\b/i],
+  ['INVESTIGATION', /\b(investigation of choice|gold standard|best test|most useful test|confirm(?:atory)? test|diagnostic test|next investigation|imaging of choice|biopsy|culture|which test)\b/i],
+  ['MANAGEMENT', /\b(treatment of choice|management|next step in management|definitive treatment|surgery of choice|therapy of choice|how (?:will|would) you manage)\b/i],
+  ['DIAGNOSIS', /\b(most likely diagnosis|diagnosis is|what is the diagnosis|likely cause|identify the (?:condition|disease)|characteristic of|pathognomonic)\b/i],
+  ['BASIC-SCIENCE', /\b(anatom|embryolog|histolog|physiolog|biochem|enzyme|receptor|gene\b|chromosom|metabolism|pathway|nerve supply|blood supply|derived from)\b/i],
+];
+
+function classifyRole(text: string): string {
+  for (const [role, re] of ROLE_RULES) if (re.test(text)) return role;
+  return 'UNTAGGED';
+}
+
+/** Stopwords for deriving a topic label from a short stem. */
+const TOPIC_STOP = new Set([
+  'which', 'what', 'following', 'patient', 'presents', 'with', 'the', 'and',
+  'for', 'from', 'this', 'that', 'most', 'best', 'true', 'false', 'about',
+  'seen', 'used', 'caused', 'due', 'not', 'all', 'except', 'given', 'below',
+  'year', 'old', 'male', 'female', 'man', 'woman', 'child', 'his', 'her',
+]);
+
+/**
+ * A short human label for the question, derived from its own words. Used to
+ * cluster related questions into a case — never shown before the user commits.
+ */
+function deriveTopic(stem: string, options: Record<string, string>): string {
+  const words = `${stem} ${Object.values(options).join(' ')}`
+    .toLowerCase()
+    .split(/[^a-z0-9-]+/)
+    .filter((w) => w.length > 4 && !TOPIC_STOP.has(w));
+
+  const freq = new Map<string, number>();
+  for (const w of words) freq.set(w, (freq.get(w) || 0) + 1);
+
+  return [...freq.entries()]
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+    .slice(0, 3)
+    .map(([w]) => w)
+    .join(', ');
+}
+
 /** "A)Foo B)Bar C)Baz D)Qux" -> { A: 'Foo', ... } */
 function parseOptions(raw: string): Record<string, string> | null {
   if (!raw) return null;
@@ -109,13 +160,19 @@ async function run() {
       year: r.year ?? 'Unknown',
       subject: r.subject || 'Medicine',
       system: r.system || 'General',
-      topic: concept.slice(0, 80),
+      topic: deriveTopic(r.stem, options),
       stem: r.stem.trim(),
       options,
       correctAnswer,
       explanation: '',
       conceptTested: concept,
-      roleTag: VALID_ROLES.has(r.role) ? r.role : 'UNTAGGED',
+      // Reclassify from the full text rather than trusting the source's
+      // DIAGNOSIS-heavy tagging; fall back to the source tag only if it is
+      // valid and ours is inconclusive.
+      // Reclassify from the full text. The source tag is NOT used as a
+      // fallback: it defaulted everything it could not place to DIAGNOSIS,
+      // which is the distortion being corrected here. Unclear stays UNTAGGED.
+      roleTag: classifyRole(`${r.stem} ${Object.values(options).join(' ')}`),
     });
   }
 

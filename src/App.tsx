@@ -7,6 +7,7 @@ import { CaseSession, CaseMode, PYQItem } from './types';
 import { DEFAULT_PYQ_INDEX } from './data/defaultQBank';
 import { processTurnOffline, generateScorecard } from './utils/ccsEngine';
 import { buildCaseSessionFromScaffold } from './utils/caseBinder';
+import { buildQuestionLedCase } from './utils/questionLedCase';
 import { parseRawQBankTextOffline } from './utils/qbankParser';
 import { saveActiveSession, loadActiveSession, saveQBankIndex, loadQBankIndex, saveCompletedCase, getMissedQIDsFromHistory } from './utils/storage';
 
@@ -110,6 +111,24 @@ export default function App() {
     } catch (err: any) {
       console.error('Failed to start case offline:', err);
       setErrorMessage('Failed to generate offline case simulation.');
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  // Build a case from the whole bank rather than the 12 authored conditions.
+  const handleStartQuestionLed = async () => {
+    setIsStarting(true);
+    setErrorMessage(null);
+    try {
+      const missedQIDs = await getMissedQIDsFromHistory();
+      const newSession = buildQuestionLedCase(pyqList, { missedQIDs });
+      setSession(newSession);
+      await saveActiveSession(newSession);
+      setActiveTab('sim');
+    } catch (err: any) {
+      console.error('Failed to build a question-led case:', err);
+      setErrorMessage(err?.message || 'Could not build a case from your question bank.');
     } finally {
       setIsStarting(false);
     }
@@ -247,6 +266,7 @@ export default function App() {
         {errorMessage && <ErrorBanner message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
         <StartScreen
           onStart={(mode, subject, blind) => handleStartNewCase(mode, subject, !!blind)}
+          onStartQuestionLed={handleStartQuestionLed}
           onOpenQBank={() => setActiveTab('qbank')}
           questionCount={pyqList.length}
           loading={isLoadingQBank}

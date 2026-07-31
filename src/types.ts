@@ -157,6 +157,9 @@ export interface CaseSession {
   id: string;
   seed: string;
   scaffoldId: string;
+  /** True when the case was generated from a cluster of questions rather than
+   *  an authored scaffold: real questions, no simulated patient behind them. */
+  isQuestionLed?: boolean;
   title: string;
   mode: CaseMode;
   subject: string;

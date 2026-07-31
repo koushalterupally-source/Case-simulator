@@ -93,7 +93,7 @@ export const CaseView: React.FC<CaseViewProps> = ({
           {/* Be honest when the loaded bank cannot supply questions for this
               patient. Silently running a "PYQ-driven" case with no PYQs, or
               with one, is the kind of thing that makes the app feel broken. */}
-          {stats.gatesTotal < (session.mode === 'rapid' ? 3 : 5) && (
+          {!session.isQuestionLed && stats.gatesTotal < (session.mode === 'rapid' ? 3 : 5) && (
             <div
               className="mb-7 rounded-xl px-4 py-3 text-[13px] leading-relaxed"
               style={{ background: 'var(--warn-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}
@@ -134,9 +134,35 @@ export const CaseView: React.FC<CaseViewProps> = ({
             )}
           </Transcript>
 
+          {/* Every decision answered — close the case properly instead of
+              leaving the player at a composer with nothing left to decide. */}
+          {!done && stats.gatesTotal > 0 && stats.gatesAnswered === stats.gatesTotal && (
+            <div
+              className="mt-8 rounded-2xl px-5 py-5 fade-rise"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)' }}
+            >
+              <h2 className="text-[16px] font-semibold">
+                {session.isQuestionLed ? 'Set complete' : 'Case complete'}
+              </h2>
+              <p className="mt-1.5 text-[14px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                You answered all {stats.gatesTotal} decision{stats.gatesTotal === 1 ? '' : 's'} —{' '}
+                {stats.gatesCorrect} correct.
+                {!session.isQuestionLed &&
+                  ' You can keep managing the patient, or close the case and see how you did.'}
+              </p>
+              <button
+                onClick={onEndCase}
+                className="mt-4 w-full rounded-xl py-2.5 text-[15px] font-medium ring-focus"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                Finish and see the scorecard
+              </button>
+            </div>
+          )}
+
           {/* Composer is hidden while a gate is awaiting an answer: the case is
               frozen at that decision, so an order box would be a dead end. */}
-          {!activeGate || activeGate.userAnswer !== undefined ? (
+          {session.isQuestionLed ? null : !activeGate || activeGate.userAnswer !== undefined ? (
             <Composer
               onSend={onSendCommand}
               onOpenOrders={() => setOrdersOpen(true)}

@@ -114,18 +114,30 @@ export const Transcript: React.FC<TranscriptProps> = ({ session, children }) => 
       {/* Patient header — plain text, not a card */}
       <div className="pb-6" style={{ borderBottom: '1px solid var(--border)' }}>
         <h1 className="text-[19px] font-semibold tracking-tight">
-          {session.patient.name}
-          <span className="font-normal" style={{ color: 'var(--text-muted)' }}>
-            {' '}· {session.patient.age} · {session.patient.gender}
-          </span>
+          {session.isQuestionLed ? (
+            session.title
+          ) : (
+            <>
+              {session.patient.name}
+              <span className="font-normal" style={{ color: 'var(--text-muted)' }}>
+                {' '}· {session.patient.age} · {session.patient.gender}
+              </span>
+            </>
+          )}
         </h1>
-        <p className="mt-1 text-[14px]" style={{ color: 'var(--text-muted)' }}>
-          {session.patient.chiefComplaint}
-        </p>
+        {!session.isQuestionLed && (
+          <p className="mt-1 text-[14px]" style={{ color: 'var(--text-muted)' }}>
+            {session.patient.chiefComplaint}
+          </p>
+        )}
       </div>
 
       {session.turns.map((turn, i) => (
-        <Turn key={i} turn={turn} showVitals={i === session.turns.length - 1} />
+        <Turn
+          key={i}
+          turn={turn}
+          showVitals={!session.isQuestionLed && i === session.turns.length - 1}
+        />
       ))}
 
       {children}
