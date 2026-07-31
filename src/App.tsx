@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
-import { VitalsBar } from './components/VitalsBar';
-import { LiveSimulation } from './components/LiveSimulation';
 import { QBankIndexBuilder } from './components/QBankIndexBuilder';
-import { ScorecardView } from './components/ScorecardView';
-import { PromptReferenceModal } from './components/PromptReferenceModal';
+import { CaseView } from './components/simple/CaseView';
+import { StartScreen } from './components/simple/StartScreen';
+import { Scorecard } from './components/simple/Scorecard';
 import { CaseSession, CaseMode, PYQItem } from './types';
 import { DEFAULT_PYQ_INDEX } from './data/defaultQBank';
 import { processTurnOffline, generateScorecard } from './utils/ccsEngine';
 import { buildCaseSessionFromScaffold } from './utils/caseBinder';
 import { parseRawQBankTextOffline } from './utils/qbankParser';
 import { saveActiveSession, loadActiveSession, saveQBankIndex, loadQBankIndex, saveCompletedCase, getMissedQIDsFromHistory } from './utils/storage';
-import { Sparkles, Activity, Layers, Award, BookOpen, AlertCircle, Play, ShieldAlert, WifiOff } from 'lucide-react';
 
 export default function App() {
   const [session, setSession] = useState<CaseSession | null>(() => {
@@ -206,149 +203,81 @@ export default function App() {
     });
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white antialiased">
-      {/* App Header */}
-      <Header
-        session={session}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onStartNewCase={(mode, subject) => handleStartNewCase(mode, subject)}
-        onPauseResume={handlePauseResume}
-        onEndCase={() => handleEndCase()}
-        isStarting={isStarting}
-      />
+  const showScorecard = activeTab === 'scorecard' && session?.scorecard;
 
-      {/* Offline Mode Indicator Badge */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-1.5 flex items-center justify-between text-xs font-mono text-emerald-400">
-        <div className="flex items-center space-x-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>100% Offline Mode Active — Zero Backend/API Dependency</span>
-        </div>
-        <div className="text-slate-400 text-[11px] hidden sm:block">
-          Indexed Questions Ready: <strong className="text-slate-200">{pyqList.length}</strong>
+  if (activeTab === 'qbank') {
+    return (
+      <div className="min-h-screen px-4" style={{ background: 'var(--bg)' }}>
+        <div className="max-w-[46rem] mx-auto py-8">
+          <button
+            onClick={() => setActiveTab('sim')}
+            className="text-[13px] mb-6 ring-focus rounded px-1"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            ← Back
+          </button>
+          <QBankIndexBuilder
+            pyqList={pyqList}
+            onUpdatePyqList={setPyqList}
+            onParseRawText={handleParseRawText}
+            isParsing={isParsingIndex}
+            isCaseActive={!!session && session.status === 'active'}
+          />
         </div>
       </div>
+    );
+  }
 
-      {/* Patient Vitals Ticker Bar */}
-      {session && session.patient && (
-        <VitalsBar vitals={session.patient.currentVitals} />
-      )}
+  if (showScorecard && session) {
+    return (
+      <Scorecard
+        session={session}
+        onBack={() => setActiveTab('sim')}
+        onNewCase={() => {
+          setSession(null);
+          setActiveTab('sim');
+        }}
+      />
+    );
+  }
 
-      {/* Error Alert Message */}
-      {errorMessage && (
-        <div className="bg-rose-950/80 border-b border-rose-500/50 p-3 text-center text-xs text-rose-200 font-mono flex items-center justify-center space-x-2">
-          <AlertCircle className="w-4 h-4 text-rose-400" />
-          <span>{errorMessage}</span>
-          <button onClick={() => setErrorMessage(null)} className="underline ml-2 text-rose-300">Dismiss</button>
-        </div>
-      )}
+  if (!session) {
+    return (
+      <>
+        {errorMessage && <ErrorBanner message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
+        <StartScreen
+          onStart={(mode, subject, blind) => handleStartNewCase(mode, subject, !!blind)}
+          onOpenQBank={() => setActiveTab('qbank')}
+          questionCount={pyqList.length}
+          loading={isLoadingQBank}
+          starting={isStarting}
+        />
+      </>
+    );
+  }
 
-      {/* Main View Area */}
-      <main className="flex-1 pb-12">
-        {/* Welcome Splash if no session active */}
-        {!session && activeTab === 'sim' ? (
-          <div className="max-w-4xl mx-auto px-4 py-12 text-center space-y-8">
-            <div className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-mono">
-              <WifiOff className="w-3.5 h-3.5" />
-              <span>100% Offline Standalone App • No Internet Needed</span>
-            </div>
-
-            <div className="space-y-3">
-              <h2 className="text-2xl sm:text-4xl font-extrabold text-white font-sans tracking-tight">
-                Offline PYQ-Driven CCS Case Simulator
-              </h2>
-              <p className="text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
-                Turn NEET-PG & INI-CET Previous Year Questions into interactive USMLE Step 3 style clinical case simulations right in your browser. Complete offline execution with local storage!
-              </p>
-            </div>
-
-            {/* Launch Mode Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left max-w-3xl mx-auto">
-              <div
-                onClick={() => handleStartNewCase('standard', 'Medicine')}
-                className="bg-slate-900 border border-slate-800 hover:border-indigo-500 p-5 rounded-2xl cursor-pointer transition-all duration-200 group shadow-lg hover:shadow-indigo-500/20 hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
-              >
-                <div className="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                  <Activity className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-white font-sans">Standard CCS Case</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  5-7 PYQ Decision Gates. Full patient simulation with real-time clock & turnaround times.
-                </p>
-              </div>
-
-              <div
-                onClick={() => handleStartNewCase('rapid', 'Medicine')}
-                className="bg-slate-900 border border-slate-800 hover:border-cyan-500 p-5 rounded-2xl cursor-pointer transition-all duration-200 group shadow-lg hover:shadow-cyan-500/20 hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
-              >
-                <div className="w-10 h-10 rounded-xl bg-cyan-600/20 text-cyan-400 flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                  <Play className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-white font-sans">Rapid 8-Min Mode</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  3 decision gates. High-yield quick clinical case revision for daily practice.
-                </p>
-              </div>
-
-              <div
-                onClick={() => handleStartNewCase('standard', 'Mixed', true)}
-                className="bg-slate-900 border border-slate-800 hover:border-amber-500 p-5 rounded-2xl cursor-pointer transition-all duration-200 group shadow-lg hover:shadow-amber-500/20 hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
-              >
-                <div className="w-10 h-10 rounded-xl bg-amber-600/20 text-amber-400 flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                  <ShieldAlert className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-bold text-white font-sans">Blind / Free-Text Mode</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Commit free-text clinical management before options are revealed. INI-CET challenge.
-                </p>
-              </div>
-            </div>
-
-            <div className="pt-4">
-              <button
-                onClick={() => handleStartNewCase('standard', 'Medicine')}
-                disabled={isStarting}
-                className="bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-bold px-8 py-3.5 rounded-xl shadow-xl shadow-indigo-500/25 transition-all duration-200 inline-flex items-center space-x-2 text-sm disabled:opacity-50 cursor-pointer hover:scale-105 active:scale-95 hover:shadow-indigo-500/40"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>{isStarting ? 'Building Clinical Case...' : 'Start Random Case Now'}</span>
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {activeTab === 'sim' && session && (
-              <LiveSimulation
-                session={session}
-                onSendCommand={handleSendCommand}
-                onCommitGateAnswer={handleCommitGateAnswer}
-                isProcessing={isProcessing}
-              />
-            )}
-
-            {activeTab === 'qbank' && (
-              <QBankIndexBuilder
-                pyqList={pyqList}
-                onUpdatePyqList={setPyqList}
-                onParseRawText={handleParseRawText}
-                isParsing={isParsingIndex}
-                isCaseActive={session?.status === 'active'}
-              />
-            )}
-
-            {activeTab === 'scorecard' && session && (
-              <ScorecardView
-                session={session}
-                onRestartCase={() => handleStartNewCase('standard', 'Medicine')}
-              />
-            )}
-
-            {activeTab === 'instructions' && <PromptReferenceModal />}
-          </>
-        )}
-      </main>
-    </div>
+  return (
+    <>
+      {errorMessage && <ErrorBanner message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
+      <CaseView
+        session={session}
+        onSendCommand={handleSendCommand}
+        onCommitGateAnswer={handleCommitGateAnswer}
+        isProcessing={isProcessing}
+        onEndCase={() => (session.scorecard ? setActiveTab('scorecard') : handleEndCase())}
+      />
+    </>
   );
 }
 
+const ErrorBanner: React.FC<{ message: string; onDismiss: () => void }> = ({ message, onDismiss }) => (
+  <div
+    className="fixed top-3 left-1/2 -translate-x-1/2 z-50 rounded-xl px-4 py-2.5 text-[14px] flex items-center gap-3 shadow-sm"
+    style={{ background: 'var(--danger-soft)', color: 'var(--danger)', border: '1px solid var(--danger)' }}
+  >
+    <span>{message}</span>
+    <button onClick={onDismiss} className="ring-focus rounded" aria-label="Dismiss">
+      ×
+    </button>
+  </div>
+);

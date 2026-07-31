@@ -171,7 +171,7 @@ export function processTurnOffline(
     currentGate.consequenceMessage = consequence;
     currentGate.explanationGiven = pyq.explanation || 'See standard-of-care guidelines.';
 
-    narrative = `[DECISION GATE COMMITTED]: ${isCorrect ? '✅ Correct decision' : isSelfReview ? '🔍 Self-review required' : '❌ Suboptimal commitment'}. ${consequence}`;
+    narrative = consequence;
 
     // Advance currentGateIndex past targetGateIdx
     updatedSession.currentGateIndex = Math.max(updatedSession.currentGateIndex, targetGateIdx + 1);
@@ -360,7 +360,7 @@ export function processTurnOffline(
       // Deteriorate vitals!
       updatedSession.patient.currentVitals.hr = Math.min(180, updatedSession.patient.currentVitals.hr + 4);
       updatedSession.patient.currentVitals.spo2 = Math.max(70, updatedSession.patient.currentVitals.spo2 - 2);
-      narrative += ` ⚠️ [CLINICAL DETERIORATION]: ${critical.name} delayed past target window (${critical.targetMilestoneMinutes} min)! Tachycardia and hypoxia worsening.`;
+      narrative += `\n\nThe patient is deteriorating: ${critical.name.toLowerCase()} is now overdue against a ${critical.targetMilestoneMinutes}-minute window. Heart rate is climbing and oxygenation is falling.`;
     } else if (executed) {
       // Improve vitals
       updatedSession.patient.currentVitals.hr = Math.max(72, updatedSession.patient.currentVitals.hr - 2);
@@ -415,7 +415,7 @@ export function generateScorecard(session: CaseSession): EndOfCaseScorecard {
   });
 
   const overOrderingList = overOrders.map(
-    (o) => `⚠️ ${o.orderName}: Unindicated test ordered (${o.turnaroundMinutes} min turnaround delay added).`
+    (o) => `${o.orderName} — not indicated here; it cost ${o.turnaroundMinutes} minutes.`
   );
 
   // Critical Delays
@@ -426,7 +426,7 @@ export function generateScorecard(session: CaseSession): EndOfCaseScorecard {
   scaffold.criticalInterventions.forEach((crit) => {
     const placed = allOrders.find((o) => crit.orderOrActionPattern.test(o.orderName));
     if (!placed && totalElapsedMinutes > crit.targetMilestoneMinutes) {
-      criticalDelays.push(`⚠️ ${crit.name}: Not performed within target milestone window (${crit.targetMilestoneMinutes} min).`);
+      criticalDelays.push(`${crit.name} — not done within the ${crit.targetMilestoneMinutes}-minute window.`);
     }
   });
 
@@ -437,8 +437,8 @@ export function generateScorecard(session: CaseSession): EndOfCaseScorecard {
     status: inc.status,
     scoreNote:
       inc.status === 'noticed_addressed'
-        ? '✅ Addressed correctly with standard recommendation (+10 pts)'
-        : '⚠️ Noticed but unaddressed or missed',
+        ? 'Noticed and handled correctly.'
+        : 'Missed, or noticed but not acted on.',
   }));
 
   const addressedIncCount = session.incidentalFindings.filter((i) => i.status === 'noticed_addressed').length;

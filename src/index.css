@@ -1,1 +1,97 @@
 @import "tailwindcss";
+
+/*
+  A quiet, readable reading surface. The old UI was a dashboard — dense panels,
+  neon accents, monospace everywhere. This is a transcript: one column, warm
+  paper, a single accent colour, and type you can read for an hour.
+*/
+:root {
+  --bg: #faf9f5;
+  --surface: #ffffff;
+  --surface-sunken: #f2f0e9;
+  --border: #e6e3da;
+  --border-strong: #d6d2c6;
+  --text: #1f1e1d;
+  --text-muted: #73716c;
+  --text-faint: #9d9a92;
+  --accent: #c96442;
+  --accent-soft: #f5e9e3;
+  --ok: #4f7a52;
+  --ok-soft: #eaf1e9;
+  --warn: #a8742a;
+  --warn-soft: #f8efe0;
+  --danger: #a63d32;
+  --danger-soft: #f8e8e5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #262624;
+    --surface: #30302e;
+    --surface-sunken: #1f1f1d;
+    --border: #3f3f3b;
+    --border-strong: #55554f;
+    --text: #f2f0ea;
+    --text-muted: #a5a29a;
+    --text-faint: #7c7a73;
+    --accent: #d97757;
+    --accent-soft: #3a2b25;
+    --ok: #86b18a;
+    --ok-soft: #242c24;
+    --warn: #d9a441;
+    --warn-soft: #332a1a;
+    --danger: #e08573;
+    --danger-soft: #3a2523;
+  }
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Numbers that line up in vitals and lab values. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.prose-body {
+  line-height: 1.7;
+}
+.prose-body p + p {
+  margin-top: 0.85em;
+}
+
+.ring-focus:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+}
+
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-rise {
+  animation: fade-rise 0.28s ease-out both;
+}
