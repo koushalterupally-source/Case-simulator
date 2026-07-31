@@ -1,0 +1,74 @@
+{
+  "subjects": [
+    {
+      "name": "Previous Year Papers",
+      "count": 2856
+    },
+    {
+      "name": "Medicine",
+      "count": 1691
+    },
+    {
+      "name": "Microbiology",
+      "count": 660
+    },
+    {
+      "name": "ENT",
+      "count": 585
+    },
+    {
+      "name": "Obstetrics & Gynaecology",
+      "count": 514
+    },
+    {
+      "name": "Biochemistry",
+      "count": 426
+    },
+    {
+      "name": "Orthopedics",
+      "count": 420
+    },
+    {
+      "name": "Dermatology",
+      "count": 211
+    },
+    {
+      "name": "Pediatrics",
+      "count": 200
+    },
+    {
+      "name": "Physiology",
+      "count": 189
+    },
+    {
+      "name": "Radiology",
+      "count": 128
+    },
+    {
+      "name": "Ophthalmology",
+      "count": 109
+    },
+    {
+      "name": "Anesthesia",
+      "count": 108
+    },
+    {
+      "name": "Psychiatry",
+      "count": 66
+    },
+    {
+      "name": "Community Medicine",
+      "count": 24
+    },
+    {
+      "name": "Anatomy",
+      "count": 22
+    },
+    {
+      "name": "Forensic Medicine",
+      "count": 2
+    }
+  ],
+  "totalCount": 8211,
+  "updatedAt": "2026-07-31T03:49:40.379Z"
+}
