@@ -104,14 +104,39 @@
 
     <script>
       // Surface a boot failure in the fallback rather than leaving it blank.
+      // Capture phase: a failed <script> fires an error that does NOT bubble,
+      // so a non-capturing listener never sees it.
       window.addEventListener('error', function (e) {
         var box = document.getElementById('boot-err');
         var msg = document.getElementById('boot-msg');
         if (!box || !document.getElementById('boot-fallback')) return;
         if (msg) msg.textContent = 'The app failed to start. Resetting usually fixes it.';
         box.style.display = 'block';
-        box.textContent = String((e && (e.message || e.error)) || 'Unknown error');
-      });
+        var target = e && e.target;
+        var what = target && target.src ? 'Failed to load ' + target.src : String((e && (e.message || e.error)) || 'Unknown error');
+        box.textContent = what;
+      }, true);
+
+      // Self-heal: if the app has not mounted shortly after load, the cached
+      // shell is almost certainly pointing at assets that no longer exist.
+      // Clear service workers and caches once, then reload.
+      setTimeout(function () {
+        if (!document.getElementById('boot-fallback')) return; // app mounted, nothing to do
+        if (sessionStorage.getItem('boot-healed')) return; // only ever once
+        try { sessionStorage.setItem('boot-healed', '1'); } catch (e) {}
+        var jobs = [];
+        if ('serviceWorker' in navigator) {
+          jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+            return Promise.all(rs.map(function (r) { return r.unregister(); }));
+          }));
+        }
+        if (window.caches) {
+          jobs.push(caches.keys().then(function (ks) {
+            return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+          }));
+        }
+        Promise.all(jobs).catch(function () {}).then(function () { window.location.reload(); });
+      }, 6000);
     </script>
 
     <script type="module" src="/src/main.tsx"></script>

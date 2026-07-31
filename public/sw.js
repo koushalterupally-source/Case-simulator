@@ -4,7 +4,7 @@
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
 // Bump on every release that changes asset hashes — activate() deletes every
 // cache that isn't this one, which is what evicts a stale shell.
-const CACHE_NAME = 'pyq-ccs-v3';
+const CACHE_NAME = 'pyq-ccs-v4';
 const OFFLINE_FALLBACK = BASE + 'index.html';
 // The hashed JS/CSS bundles are injected here at build time by the sw-precache
 // plugin in vite.config.ts. Without this they are only cached once the worker is
@@ -70,7 +70,11 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           return res;
         })
-        .catch(() => caches.match(OFFLINE_FALLBACK).then((r) => r || Response.error()));
+        // NEVER answer a script or stylesheet request with index.html. Doing so
+        // hands the browser HTML where it expects a JS module: it refuses to
+        // execute it, throws nothing that bubbles to window, and the page just
+        // sits there blank. Let a failed asset fail honestly instead.
+        .catch(() => Response.error());
     })
   );
 });
