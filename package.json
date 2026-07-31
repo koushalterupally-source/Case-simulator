@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "test": "npx tsx tests/simulator.test.ts"
+    "test": "npx tsx tests/simulator.test.ts",
+    "build:index": "npx tsx scripts/build-index.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

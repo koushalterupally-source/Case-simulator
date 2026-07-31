@@ -3,6 +3,7 @@ import { addMinutesToSimTime, processTurnOffline, generateScorecard } from '../s
 import { buildCaseSessionFromScaffold } from '../src/utils/caseBinder';
 import { exportQBankToJSON, importQBankFromJSON } from '../src/utils/qbankParser';
 import { DEFAULT_PYQ_INDEX } from '../src/data/defaultQBank';
+import { CASE_SCAFFOLDS } from '../src/data/cases/scaffolds';
 import { CaseSession, PYQItem } from '../src/types';
 
 function runTests() {
@@ -100,6 +101,28 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
   const uncommittedGate = session.decisionGates[0];
   assert(uncommittedGate.isCorrect === undefined, 'Uncommitted gate does NOT expose correctness');
   assert(uncommittedGate.userAnswer === undefined, 'Uncommitted gate does NOT expose user answer');
+
+  // Check that no gate milestone in any scaffold contains its conditionName keywords in patientContext
+  let leakFound = false;
+  CASE_SCAFFOLDS.forEach((scaffold) => {
+    const condName = scaffold.conditionName.toLowerCase();
+    const keywords = condName
+      .split(/[\s\(\)\/]+/)
+      .map((w) => w.trim())
+      .filter((w) => w.length > 3 && !['acute', 'wall', 'severe', 'with', 'shock', 'young', 'post', 'type', 'gastroenterology'].includes(w));
+
+    scaffold.gateMilestones.forEach((gate, gIdx) => {
+      const ctx = gate.patientContext.toLowerCase();
+      keywords.forEach((kw) => {
+        const regex = new RegExp(`\\b${kw}\\b`, 'i');
+        if (regex.test(ctx)) {
+          leakFound = true;
+          console.error(`Leak detected in ${scaffold.id} gate ${gIdx}: keyword "${kw}" found in "${gate.patientContext}"`);
+        }
+      });
+    });
+  });
+  assert(!leakFound, 'No gate patientContext names its own diagnosis');
 
   // 5. JSON Import & Export Test
   console.log('\n--- Test Suite 5: Import & Export Integrity ---');
