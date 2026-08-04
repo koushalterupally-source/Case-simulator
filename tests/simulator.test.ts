@@ -16,6 +16,7 @@ import {
 } from '../src/utils/gamification';
 import { isImageDependent, isUsableAsGate, cleanStem } from '../src/utils/questionQuality';
 import { CONDITION_VOCABULARY } from '../src/data/conditionVocabulary';
+import { gateStatus } from '../src/components/simple/DecisionsPanel';
 import { CaseSession, PYQItem } from '../src/types';
 
 function runTests() {
@@ -390,6 +391,60 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
   }
   const spelledOut = processTurnOffline(blindCase, undefined, correctText, 0);
   assert(spelledOut.decisionGates[0].isCorrect === true, 'Writing the answer out in full is still graded correct');
+
+  // 4i. Decisions sidebar — questions no longer interrupt the case
+  console.log('\n--- Test Suite 4i: Decisions Sidebar ---');
+
+  const sidebarBank: PYQItem[] = ['A', 'B', 'C', 'D', 'E'].map((tag, n) => ({
+    qid: `SB-${n}`, exam: 'NEET-PG', year: 2022, subject: 'Medicine', system: 'Infectious Disease',
+    topic: 'meningitis',
+    stem: `Question ${tag}: which statement about bacterial meningitis management is correct?`,
+    options: { A: `First ${tag}`, B: `Second ${tag}`, C: `Third ${tag}`, D: `Fourth ${tag}` },
+    correctAnswer: 'A', conceptTested: '', roleTag: 'UNTAGGED',
+  } as PYQItem));
+
+  const sidebarCase = buildCaseSessionFromScaffold(sidebarBank, { scaffoldId: 'scaffold_meningitis' });
+  assert(sidebarCase.decisionGates.length >= 3, 'Sidebar case has several related questions to list');
+  assert(
+    sidebarCase.decisionGates.every((g) => gateStatus(g) === 'pending'),
+    'Every question starts listed as open'
+  );
+
+  // The sidebar lets the user answer whichever question they like, so the engine
+  // must record an answer against the gate that was actually opened rather than
+  // whichever one the case happens to be pointing at.
+  const lastIdx = sidebarCase.decisionGates.length - 1;
+  const outOfOrder = processTurnOffline(sidebarCase, undefined, sidebarCase.decisionGates[lastIdx].pyq.correctAnswer, lastIdx);
+  assert(
+    outOfOrder.decisionGates[lastIdx].userAnswer !== undefined,
+    'Answering the last question first records against that question'
+  );
+  assert(
+    outOfOrder.decisionGates[0].userAnswer === undefined,
+    'Answering out of order leaves the earlier questions untouched'
+  );
+  assert(gateStatus(outOfOrder.decisionGates[lastIdx]) === 'correct', 'A right answer reads as correct');
+
+  // Going back to an earlier question afterwards must still work.
+  const wrongKey = sidebarCase.decisionGates[0].pyq.correctAnswer === 'A' ? 'B' : 'A';
+  const backFill = processTurnOffline(outOfOrder, undefined, wrongKey, 0);
+  assert(backFill.decisionGates[0].userAnswer === wrongKey, 'An earlier question can still be answered later');
+  assert(gateStatus(backFill.decisionGates[0]) === 'incorrect', 'A wrong answer reads as incorrect');
+  assert(
+    backFill.decisionGates[lastIdx].userAnswer !== undefined,
+    'Answering an earlier question does not clear a later one'
+  );
+
+  // Each answer must play back into the patient's course — that is what makes
+  // the case respond to what the user chose.
+  assert(
+    !!backFill.decisionGates[0].consequenceMessage,
+    'A committed decision produces a consequence in the case'
+  );
+  assert(
+    backFill.turns.length > sidebarCase.turns.length,
+    'Committing a decision advances the case transcript'
+  );
 
   // 5. JSON Import & Export Test
   console.log('\n--- Test Suite 5: Import & Export Integrity ---');

@@ -27,6 +27,17 @@ export const OrderSheet: React.FC<OrderSheetProps> = ({ open, onClose, onSubmit 
     }
   }, [open]);
 
+  // Escape closes the sheet, as it does the decisions panel. Without this the
+  // only way out was the × or the backdrop.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const toggle = (item: string) =>

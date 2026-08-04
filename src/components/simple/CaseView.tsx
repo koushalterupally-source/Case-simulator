@@ -4,6 +4,7 @@ import { Transcript } from './Transcript';
 import { Composer } from './Composer';
 import { OrderSheet } from './OrderSheet';
 import { GateCard } from './GateCard';
+import { DecisionsPanel } from './DecisionsPanel';
 import { computeGameStats, xpAwardedForGate } from '../../utils/gamification';
 
 interface CaseViewProps {
@@ -22,12 +23,21 @@ export const CaseView: React.FC<CaseViewProps> = ({
   onEndCase,
 }) => {
   const stats = computeGameStats(session);
+  const done = session.status === 'completed';
+  const [ordersOpen, setOrdersOpen] = React.useState(false);
+  const [decisionsOpen, setDecisionsOpen] = React.useState(false);
+
+  // A question-led set is nothing but its questions, so those stay in the page.
+  // A patient case keeps them in the sidebar, where they wait to be opened
+  // instead of taking the screen the moment a milestone is reached.
+  const inlineQuestions = !!session.isQuestionLed;
+
   const gateIdx = session.currentGateIndex;
   const activeGate =
     gateIdx >= 0 && gateIdx < session.decisionGates.length ? session.decisionGates[gateIdx] : null;
 
   // Keep a just-answered gate on screen so the explanation can be read, then
-  // let it fall away once the case moves on.
+  // let it fall away once the case moves on. Question-led sets only.
   const [lingering, setLingering] = React.useState<number | null>(null);
   React.useEffect(() => {
     if (activeGate && activeGate.userAnswer !== undefined) setLingering(gateIdx);
@@ -39,8 +49,7 @@ export const CaseView: React.FC<CaseViewProps> = ({
       ? session.decisionGates[shownIdx]
       : null;
 
-  const done = session.status === 'completed';
-  const [ordersOpen, setOrdersOpen] = React.useState(false);
+  const unanswered = session.decisionGates.filter((g) => g.userAnswer === undefined).length;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
@@ -49,6 +58,15 @@ export const CaseView: React.FC<CaseViewProps> = ({
         onClose={() => setOrdersOpen(false)}
         onSubmit={onSendCommand}
       />
+      {!inlineQuestions && (
+        <DecisionsPanel
+          open={decisionsOpen}
+          onClose={() => setDecisionsOpen(false)}
+          session={session}
+          onCommit={onCommitGateAnswer}
+          busy={isProcessing}
+        />
+      )}
       {/* Thin bar: progress and one action. Nothing else. */}
       <header
         className="sticky top-0 z-10 px-4"
@@ -78,13 +96,32 @@ export const CaseView: React.FC<CaseViewProps> = ({
             )}
           </div>
 
-          <button
-            onClick={onEndCase}
-            className="text-[13px] shrink-0 ring-focus rounded px-1"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            {done ? 'View scorecard' : 'End case'}
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            {!inlineQuestions && session.decisionGates.length > 0 && (
+              <button
+                onClick={() => setDecisionsOpen(true)}
+                className="text-[13px] rounded-full px-3 py-1 flex items-center gap-1.5 ring-focus"
+                style={{
+                  background: unanswered > 0 ? 'var(--accent-soft)' : 'var(--surface-sunken)',
+                  color: unanswered > 0 ? 'var(--accent)' : 'var(--text-muted)',
+                  border: `1px solid ${unanswered > 0 ? 'var(--accent)' : 'var(--border)'}`,
+                }}
+              >
+                Decisions
+                <span className="tnum">
+                  {unanswered > 0 ? unanswered : `${stats.gatesAnswered}/${stats.gatesTotal}`}
+                </span>
+              </button>
+            )}
+
+            <button
+              onClick={onEndCase}
+              className="text-[13px] ring-focus rounded px-1"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              {done ? 'View scorecard' : 'End case'}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -116,7 +153,7 @@ export const CaseView: React.FC<CaseViewProps> = ({
           )}
 
           <Transcript session={session}>
-            {shownGate && (
+            {inlineQuestions && shownGate && (
               <GateCard
                 gate={shownGate}
                 index={shownIdx!}
@@ -125,6 +162,24 @@ export const CaseView: React.FC<CaseViewProps> = ({
                 xpAwarded={shownIdx !== null ? xpAwardedForGate(session, shownIdx) : 0}
                 onCommit={(answer) => onCommitGateAnswer(answer, shownIdx!)}
               />
+            )}
+
+            {/* A decision becoming relevant is a note in the case, not an
+                interruption: it says one is waiting and where to find it, and
+                the case carries on either way. */}
+            {!inlineQuestions && unanswered > 0 && !done && (
+              <button
+                onClick={() => setDecisionsOpen(true)}
+                className="w-full text-left rounded-2xl px-4 py-3 text-[14px] ring-focus fade-rise"
+                style={{
+                  background: 'var(--accent-soft)',
+                  border: '1px solid var(--accent)',
+                  color: 'var(--accent)',
+                }}
+              >
+                {unanswered} decision{unanswered === 1 ? '' : 's'} waiting on you — open the
+                decisions panel to answer{unanswered === 1 ? ' it' : ' them'}.
+              </button>
             )}
 
             {isProcessing && (
@@ -160,17 +215,16 @@ export const CaseView: React.FC<CaseViewProps> = ({
             </div>
           )}
 
-          {/* Composer is hidden while a gate is awaiting an answer: the case is
-              frozen at that decision, so an order box would be a dead end. */}
-          {session.isQuestionLed ? null : !activeGate || activeGate.userAnswer !== undefined ? (
+          {/* The composer used to disappear whenever a question was waiting,
+              which froze the case at that decision. Questions live in the
+              sidebar now, so the patient can always be managed. */}
+          {inlineQuestions ? null : (
             <Composer
               onSend={onSendCommand}
               onOpenOrders={() => setOrdersOpen(true)}
               disabled={done}
               busy={isProcessing}
             />
-          ) : (
-            <div className="h-8" />
           )}
         </div>
       </main>

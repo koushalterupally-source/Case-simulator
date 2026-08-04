@@ -95,3 +95,23 @@ body {
 .fade-rise {
   animation: fade-rise 0.28s ease-out both;
 }
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.slide-in-right {
+  animation: slide-in-right 0.24s ease-out both;
+}
+
+/* Respect a stated preference for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .fade-rise,
+  .slide-in-right {
+    animation: none;
+  }
+}
