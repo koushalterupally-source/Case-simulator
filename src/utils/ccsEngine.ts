@@ -89,9 +89,33 @@ function matchBlindAnswer(
     return { isCorrect: true, isSelfReview: false };
   }
 
-  // 2. Substring or option text inclusion
-  if (correctOptText && (userText.includes(correctOptText) || correctOptText.includes(userText))) {
-    return { isCorrect: true, isSelfReview: false };
+  // 2. Substring or option text inclusion.
+  //
+  // Both directions need a floor. Testing `correctOptText.includes(userText)`
+  // on its own meant any fragment of the answer scored full marks: against
+  // "Needle decompression", typing "e" — or "o", or "n", or "ss" — was graded
+  // correct with XP awarded, while typing a genuinely wrong option was graded
+  // wrong. Blind mode asks the user to write out their management, so require
+  // enough of it to show they knew the answer, and require whole words rather
+  // than a substring that happens to land mid-word.
+  const MIN_FREE_TEXT_MATCH = 4;
+  const isWholeWordRun = (haystack: string, needle: string) =>
+    new RegExp(`\\b${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(haystack);
+
+  if (correctOptText && userText.length >= MIN_FREE_TEXT_MATCH) {
+    if (userText.includes(correctOptText) && correctOptText.length >= MIN_FREE_TEXT_MATCH) {
+      return { isCorrect: true, isSelfReview: false };
+    }
+    // A partial answer counts only if it is a whole word or phrase of the key
+    // and carries most of it — "needle decompression" for "Needle
+    // decompression", not "press" for "decompression".
+    if (
+      correctOptText.includes(userText) &&
+      isWholeWordRun(correctOptText, userText) &&
+      userText.length >= correctOptText.length / 2
+    ) {
+      return { isCorrect: true, isSelfReview: false };
+    }
   }
 
   // 3. Clinical Synonym Dictionary

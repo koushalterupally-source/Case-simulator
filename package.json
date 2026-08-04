@@ -11,7 +11,8 @@
     "test": "npx tsx tests/simulator.test.ts",
     "build:index": "npx tsx scripts/build-index.ts",
     "verify:index": "npx tsx scripts/verify-index.ts",
-    "import:index": "npx tsx scripts/import-master-index.ts"
+    "import:index": "npx tsx scripts/import-master-index.ts",
+    "import:medmcqa": "npx tsx scripts/import-medmcqa.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

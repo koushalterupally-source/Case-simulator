@@ -58,15 +58,40 @@ export default function App() {
         const manifestRes = await fetch(`${base}pyq-index/manifest.json`);
         if (manifestRes.ok) {
           const manifest = await manifestRes.json();
-          let allItems: PYQItem[] = [];
-          for (const sub of manifest.subjects || []) {
-            const safeName = sub.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const subRes = await fetch(`${base}pyq-index/subject_${safeName}.json`);
-            if (subRes.ok) {
-              const subItems: PYQItem[] = await subRes.json();
-              allItems = allItems.concat(subItems);
-            }
+          const subjects: { name: string }[] = manifest.subjects || [];
+
+          // Each subject file is fetched independently, and in parallel.
+          //
+          // These were awaited one at a time inside a single try/catch, so one
+          // failed request — a dropped connection on any of the nineteen files —
+          // threw straight past the loop and discarded every question already
+          // loaded. The app then fell back to the small built-in index without
+          // saying so, and quietly built its cases from a couple of dozen
+          // questions instead of the whole bank. A partial bank is worth
+          // keeping; a silent empty one is not.
+          const results = await Promise.allSettled(
+            subjects.map(async (sub) => {
+              const safeName = sub.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+              const subRes = await fetch(`${base}pyq-index/subject_${safeName}.json`);
+              if (!subRes.ok) throw new Error(`${sub.name}: HTTP ${subRes.status}`);
+              return (await subRes.json()) as PYQItem[];
+            })
+          );
+
+          const allItems: PYQItem[] = [];
+          const failed: string[] = [];
+          results.forEach((r, i) => {
+            if (r.status === 'fulfilled' && Array.isArray(r.value)) allItems.push(...r.value);
+            else failed.push(subjects[i]?.name ?? `#${i}`);
+          });
+
+          if (failed.length > 0) {
+            console.warn(
+              `QBank: ${failed.length} of ${subjects.length} subject bundles failed ` +
+                `(${failed.join(', ')}). Continuing with ${allItems.length} questions.`
+            );
           }
+
           if (allItems.length > 0) {
             setPyqList(allItems);
             await saveQBankIndex(allItems);

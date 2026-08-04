@@ -1,5 +1,6 @@
 import { CaseSession, PYQItem, DecisionGate, SimTurn, Vitals } from '../types';
 import { createPRNG, shufflePYQOptions } from './rng';
+import { cleanStem, isUsableAsGate } from './questionQuality';
 
 /**
  * Question-led cases.
@@ -109,7 +110,10 @@ export function buildQuestionLedCase(
   const prng = createPRNG(seed);
   const want = options.gateCount ?? 5;
 
-  const valid = pyqIndex.filter((q) => q.correctAnswer !== 'ANSWER-NOT-IN-SOURCE' && !q.isDraft);
+  // A question-led case draws from the whole bank rather than one condition, so
+  // it is the most exposed to the unanswerable records in it — the 142 stems
+  // that ask about a picture the app does not ship.
+  const valid = pyqIndex.filter(isUsableAsGate);
   if (valid.length === 0) throw new Error('No usable questions in the bank.');
 
   let pool = valid;
@@ -175,7 +179,7 @@ export function buildQuestionLedCase(
     );
     return {
       id: `qgate_${idx + 1}`,
-      pyq: { ...pyq, options: shuffledOptions, correctAnswer: newCorrectAnswer },
+      pyq: { ...pyq, stem: cleanStem(pyq.stem), options: shuffledOptions, correctAnswer: newCorrectAnswer },
       triggerTurnIndex: idx,
       // Neutral framing only. Nothing here may hint at the answer, and nothing
       // may claim a clinical finding the question does not state.

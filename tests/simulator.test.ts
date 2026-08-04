@@ -14,6 +14,8 @@ import {
   bpSeverity,
   tempSeverity,
 } from '../src/utils/gamification';
+import { isImageDependent, isUsableAsGate, cleanStem } from '../src/utils/questionQuality';
+import { CONDITION_VOCABULARY } from '../src/data/conditionVocabulary';
 import { CaseSession, PYQItem } from '../src/types';
 
 function runTests() {
@@ -262,6 +264,132 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
   // A question-led case must not pretend to be a simulated patient.
   assert(qCase.incidentalFindings.length === 0, 'Question-led case plants no fake incidental findings');
   assert(qCase.patient.diagnosis === '', 'Question-led case claims no diagnosis');
+
+  // 4f. Question quality — what may never reach a decision gate
+  console.log('\n--- Test Suite 4f: Question Quality ---');
+  assert(isImageDependent('Identify the organism stained with India Ink stain?'), 'An "identify the..." question is image-dependent');
+  assert(isImageDependent('The given chest X-ray is suggestive of:'), 'A question about a given X-ray is image-dependent');
+  assert(!isImageDependent('What is the most sensitive marker for myocardial infarction?'), 'A plain text question is not image-dependent');
+  assert(
+    cleanStem('Immediate management of tension pneumothorax is? (NEET PG 2019)') ===
+      'Immediate management of tension pneumothorax is?',
+    'Exam provenance is stripped from the stem shown to the player'
+  );
+  assert(
+    cleanStem('Identify the organism? (FMGE DECEMBER 2020)') === 'Identify the organism?',
+    'Exam tag stripped regardless of exam name'
+  );
+  assert(
+    cleanStem('What is seen in NEET syndrome?') === 'What is seen in NEET syndrome?',
+    'A stem that merely contains an exam word is left alone'
+  );
+
+  const usable = (over: Partial<PYQItem>): PYQItem => ({
+    qid: 'U1', exam: 'NEET-PG', year: 2023, subject: 'Medicine', system: 'Cardiology',
+    topic: '', stem: 'What is the most specific marker for myocardial infarction?',
+    options: { A: 'Troponin I', B: 'CK-MB', C: 'Myoglobin', D: 'LDH' },
+    correctAnswer: 'A', conceptTested: '', roleTag: 'INVESTIGATION', ...over,
+  } as PYQItem);
+  assert(isUsableAsGate(usable({})), 'A complete four-option question is usable');
+  assert(!isUsableAsGate(usable({ stem: 'Identify the organism from the image?' })), 'Image-dependent question is not usable as a gate');
+  assert(!isUsableAsGate(usable({ stem: 'Shortest?' })), 'A fragment of a stem is not usable');
+  assert(!isUsableAsGate(usable({ options: { A: 'Troponin', B: '', C: 'X', D: 'Y' } as PYQItem['options'] })), 'A blank option makes a question unusable');
+  assert(!isUsableAsGate(usable({ correctAnswer: 'ANSWER-NOT-IN-SOURCE' })), 'A question with no known answer is not usable');
+
+  // 4g. Gate binding must be about THIS patient — regressions that shipped
+  console.log('\n--- Test Suite 4g: Gate Binding Fidelity ---');
+
+  // The whole shipped bank contains the token "STEMI" zero times, so matching
+  // on the scaffold's condition name alone bound nothing and the flagship
+  // cardiology case opened with no decisions at all.
+  const miPyqs: PYQItem[] = [
+    {
+      qid: 'MI-1', exam: 'NEET-PG', year: 2022, subject: 'Medicine', system: 'Cardiology',
+      topic: 'cardiac markers',
+      stem: 'What is the most sensitive and specific marker for myocardial infarction?',
+      options: { A: 'Troponin I', B: 'CK-MB', C: 'Myoglobin', D: 'AST' },
+      correctAnswer: 'A', conceptTested: '', roleTag: 'INVESTIGATION',
+    } as PYQItem,
+  ];
+  const miCase = buildCaseSessionFromScaffold(miPyqs, { scaffoldId: 'scaffold_stemi' });
+  assert(miCase.decisionGates.length > 0, 'A myocardial infarction question binds into the STEMI case');
+
+  // A condition named only in a wrong answer is evidence AGAINST the question
+  // being about it. "Sympathetic ophthalmia..." listed "Urinary tract
+  // infection" as option D and was presented as a urosepsis decision.
+  const distractorOnly: PYQItem[] = [
+    {
+      qid: 'DIST-1', exam: 'NEET-PG', year: 2021, subject: 'Ophthalmology', system: 'Ophthalmology',
+      topic: 'ocular trauma',
+      stem: 'Sympathetic ophthalmia is a consequence of which of the following?',
+      options: { A: 'Penetrating ocular trauma', B: 'Blunt ocular trauma', C: 'Chemical injury', D: 'Urinary tract infection' },
+      correctAnswer: 'A', conceptTested: '', roleTag: 'DIAGNOSIS',
+    } as PYQItem,
+  ];
+  assert(
+    buildCaseSessionFromScaffold(distractorOnly, { scaffoldId: 'scaffold_urosepsis' }).decisionGates.length === 0,
+    'A condition named only in a distractor does not bind the question into that case'
+  );
+
+  // Two records, different qids, identical wording: de-duplicating on qid alone
+  // let a case ask the same question twice in a row.
+  const twinStem = 'Pulsus paradoxus with raised jugular venous pressure is characteristically seen in tension pneumothorax?';
+  const twins: PYQItem[] = [1, 2, 3].map((n) => ({
+    qid: `TWIN-${n}`, exam: 'NEET-PG', year: 2020, subject: 'Surgery', system: 'Trauma & Emergency',
+    topic: 'pneumothorax', stem: twinStem,
+    options: { A: 'True', B: 'False', C: 'Only if hypotensive', D: 'Only in children' },
+    correctAnswer: 'A', conceptTested: '', roleTag: 'DIAGNOSIS',
+  } as PYQItem));
+  const twinCase = buildCaseSessionFromScaffold(twins, { scaffoldId: 'scaffold_pneumothorax' });
+  assert(twinCase.decisionGates.length <= 1, 'The same question wording never appears twice in one case');
+
+  // An unanswerable question must not be chosen even when it is topically perfect.
+  const imageOnly: PYQItem[] = [
+    {
+      qid: 'IMG-1', exam: 'NEET-PG', year: 2021, subject: 'Surgery', system: 'Trauma & Emergency',
+      topic: 'pneumothorax', stem: 'Identify the tension pneumothorax finding in the given chest X-ray?',
+      options: { A: 'Tracheal deviation', B: 'Consolidation', C: 'Effusion', D: 'Cardiomegaly' },
+      correctAnswer: 'A', conceptTested: '', roleTag: 'DIAGNOSIS',
+    } as PYQItem,
+  ];
+  assert(
+    buildCaseSessionFromScaffold(imageOnly, { scaffoldId: 'scaffold_pneumothorax' }).decisionGates.length === 0,
+    'A question that needs a picture is never bound, however relevant it is'
+  );
+
+  // Every scaffold the vocabulary claims to describe must actually exist.
+  const scaffoldIds = new Set(CASE_SCAFFOLDS.map((s) => s.id));
+  assert(
+    Object.keys(CONDITION_VOCABULARY).every((id) => scaffoldIds.has(id)),
+    'Condition vocabulary refers only to real scaffolds'
+  );
+
+  // 4h. Blind mode must not award marks for a fragment
+  console.log('\n--- Test Suite 4h: Blind Mode Grading ---');
+  const blindPyq: PYQItem[] = [
+    {
+      qid: 'BL-1', exam: 'NEET-PG', year: 2022, subject: 'Surgery', system: 'Trauma & Emergency',
+      topic: 'pneumothorax',
+      stem: 'Immediate management of a tension pneumothorax in a hypotensive trauma patient?',
+      options: { A: 'Needle decompression', B: 'Chest physiotherapy', C: 'Oral antibiotics', D: 'Observation alone' },
+      correctAnswer: 'A', conceptTested: '', roleTag: 'EMERGENCY',
+    } as PYQItem,
+  ];
+  const blindCase = buildCaseSessionFromScaffold(blindPyq, { mode: 'blind', scaffoldId: 'scaffold_pneumothorax' });
+  assert(blindCase.decisionGates.length === 1, 'Blind case bound its single question');
+  const correctText = blindCase.decisionGates[0].pyq.options[
+    blindCase.decisionGates[0].pyq.correctAnswer as 'A' | 'B' | 'C' | 'D'
+  ];
+  // Every single letter of the answer used to score full marks.
+  for (const fragment of ['e', 'o', 'n', 'ss', 'i']) {
+    const graded = processTurnOffline(blindCase, undefined, fragment, 0);
+    assert(
+      graded.decisionGates[0].isCorrect !== true,
+      `Blind answer "${fragment}" is not graded correct against "${correctText}"`
+    );
+  }
+  const spelledOut = processTurnOffline(blindCase, undefined, correctText, 0);
+  assert(spelledOut.decisionGates[0].isCorrect === true, 'Writing the answer out in full is still graded correct');
 
   // 5. JSON Import & Export Test
   console.log('\n--- Test Suite 5: Import & Export Integrity ---');
