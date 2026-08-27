@@ -60,6 +60,15 @@ export async function show(root) {
   clear(root);
   setTitle('Anki High-Yield Deck');
 
+  try {
+    const saved = await store.get('ankiProgress', 'count');
+    if (saved && typeof saved.value === 'number') {
+      completedCount = saved.value;
+    }
+  } catch (err) {
+    console.warn('Failed to load anki progress', err);
+  }
+
   function renderView() {
     clear(root);
     setTitle('Anki High-Yield Deck');
@@ -213,8 +222,15 @@ export async function show(root) {
     root.appendChild(container);
   }
 
-  function rateCard(filteredDeck, rating) {
+  async function rateCard(filteredDeck, rating) {
     completedCount += 1;
+    
+    try {
+      await store.put('ankiProgress', { id: 'count', value: completedCount });
+    } catch (err) {
+      console.warn('Failed to save anki progress', err);
+    }
+    
     isFlipped = false;
     currentCardIndex = (currentCardIndex + 1) % filteredDeck.length;
     renderView();
