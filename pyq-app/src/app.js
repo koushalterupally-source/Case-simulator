@@ -187,6 +187,10 @@ async function routeTo(screen, params) {
       gtRunning = false;
       return analysis.show(root, params);
 
+    case 'cases':
+      location.assign('simulator/');
+      return;
+
     case 'review':
       return review.show(root);
 

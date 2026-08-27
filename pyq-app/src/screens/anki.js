@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Anki Spaced Repetition Flashcard Screen
  * Interactive medical flashcards with 3D card flips, high-yield pearls, and rating intervals.
  */
@@ -8,76 +8,47 @@ import * as ui from '../ui.js';
 import { el, clear } from '../dom.js';
 
 const ANKI_DECKS = [
-  {
-    id: 'anki_01',
-    subject: 'Medicine',
-    front: 'What is the diagnostic triad of Normal Pressure Hydrocephalus (NPH)?',
-    back: 'Triad: Wet, Wacky, Wobbly\n1. Urinary Incontinence\n2. Dementia / Cognitive Decline\n3. Gait Apraxia (Magnetic Gait)\n\nHigh-Yield Pearl: Large-volume lumbar puncture is both diagnostic and therapeutic (Miller Fisher Test).',
-    tag: 'Neurology'
-  },
-  {
-    id: 'anki_02',
-    subject: 'Pharmacology',
-    front: 'What is the Drug of Choice (DOC) for Paroxysmal Supraventricular Tachycardia (PSVT)?',
-    back: 'Drug of Choice: IV Adenosine (rapid bolus 6mg, followed by 12mg if needed).\n\nMechanism: Activates A1 adenosine receptors -> opens K+ channels -> slows AV nodal conduction.\nContraindication: Bronchial asthma / severe COPD.',
-    tag: 'Cardiology'
-  },
-  {
-    id: 'anki_03',
-    subject: 'Pathology',
-    front: 'What is the pathognomonic biopsy finding in Asbestosis?',
-    back: 'Asbestos Bodies / Ferruginous Bodies\n(Golden-brown dumbbell-shaped beaded rods coated with iron and protein, stain positive with Prussian blue).\n\nKey Association: Malignant Mesothelioma (calretinin positive) & Bronchogenic Carcinoma (most common tumor).',
-    tag: 'Pulmonology'
-  },
-  {
-    id: 'anki_04',
-    subject: 'Surgery',
-    front: 'What is Charcot''s Triad and Reynolds'' Pentad in Acute Cholangitis?',
-    back: 'Charcot''s Triad: Right upper quadrant pain + Jaundice + Fever with chills.\n\nReynolds'' Pentad: Charcot''s Triad + Hypotension (Shock) + Altered Mental Status.\n\nTreatment: Urgent biliary decompression (ERCP) + IV broad-spectrum antibiotics.',
-    tag: 'GI Surgery'
-  },
-  {
-    id: 'anki_05',
-    subject: 'Pediatrics',
-    front: 'What are the classic radiographic signs in (A) Croup and (B) Epiglottitis?',
-    back: 'A) Croup (Laryngotracheobronchitis):\n-> Steeple Sign (subglottic tracheal narrowing on AP X-ray).\n\nB) Acute Epiglottitis:\n-> Thumbprint Sign (swollen epiglottis on Lateral Neck X-ray).\n\nEtiology: Croup = Parainfluenza; Epiglottitis = H. influenzae type b.',
-    tag: 'Pediatrics'
-  },
-  {
-    id: 'anki_06',
-    subject: 'OBGY',
-    front: 'What is the diagnostic ultrasound sign of a Complete Hydatidiform Mole?',
-    back: '"Snowstorm" or "Bunch of Grapes" appearance on pelvic ultrasound (vesicular echogenic mass without fetal parts).\n\nKaryotype: 46,XX (90%) — androgenetic origin (fertilization of an empty ovum by a single sperm that duplicates).\nTumor Marker: Markedly elevated serum beta-hCG (>100,000 mIU/mL).',
-    tag: 'Obstetrics'
-  },
-  {
-    id: 'anki_07',
-    subject: 'Microbiology',
-    front: 'What is the hallmark microscopic feature of Rabies viral infection?',
-    back: 'Negri Bodies\n(Eosinophilic, sharply demarcated, intracytoplasmic inclusions found in the pyramidal cells of the hippocampus and Purkinje cells of the cerebellum).',
-    tag: 'Virology'
-  },
-  {
-    id: 'anki_08',
-    subject: 'Biochemistry',
-    front: 'What enzyme is deficient in McArdle Disease (Glycogen Storage Disease Type V)?',
-    back: 'Enzyme Deficient: Muscle Glycogen Phosphorylase (Myophosphorylase).\n\nClinical Presentation: Painful muscle cramps, exercise intolerance, second-wind phenomenon, myoglobinuria (burgundy urine after strenuous exercise).\nBlood test: Failure of blood lactate to rise after ischemic forearm exercise.',
-    tag: 'Metabolism'
-  },
-  {
-    id: 'anki_09',
-    subject: 'Anatomy',
-    front: 'What structure is at risk of injury during surgical ligation of the Superior Thyroid Artery?',
-    back: 'External branch of the Superior Laryngeal Nerve (innervates the Cricothyroid muscle -> regulates vocal cord tension / pitch).\n\nInjury leads to: Loss of high-pitched voice and vocal fatigue.\n(Note: Inferior thyroid artery ligation risks the Recurrent Laryngeal Nerve).',
-    tag: 'Head & Neck'
-  },
-  {
-    id: 'anki_10',
-    subject: 'Dermatology',
-    front: 'What is Nikolsky''s sign, and in which blistering diseases is it positive vs negative?',
-    back: 'Nikolsky''s Sign: Dislodgement of superficial epidermis by gentle lateral pressure.\n\nPositive (Intraepidermal split):\n1. Pemphigus vulgaris (anti-desmoglein 3/1)\n2. Staphylococcal Scalded Skin Syndrome (SSSS)\n3. Toxic Epidermal Necrolysis (TEN)\n\nNegative (Subepidermal split):\n1. Bullous Pemphigoid (anti-BP180 / BP230)',
-    tag: 'Dermatology'
-  }
+  { id: 'anki_01', subject: 'Medicine', front: 'What is the diagnostic triad of Normal Pressure Hydrocephalus (NPH)?', back: 'Triad: Wet, Wacky, Wobbly\n1. Urinary Incontinence\n2. Dementia / Cognitive Decline\n3. Gait Apraxia (Magnetic Gait)\n\nHigh-Yield Pearl: Large-volume lumbar puncture is both diagnostic and therapeutic (Miller Fisher Test).', tag: 'Neurology' },
+  { id: 'anki_02', subject: 'Medicine', front: 'What are the ECG findings of hyperkalemia?', back: '1. Tall peaked T waves\n2. Prolonged PR interval\n3. Widened QRS complex\n4. Sine wave pattern (severe)\n\nPearl: IV Calcium gluconate is given first to stabilize the myocardium.', tag: 'Cardiology' },
+  { id: 'anki_03', subject: 'Medicine', front: 'What is the classic triad of reactive arthritis?', back: '1. Urethritis (can\'t pee)\n2. Conjunctivitis (can\'t see)\n3. Arthritis (can\'t climb a tree)\n\nPearl: HLA-B27 positive, usually follows Chlamydia or GI infection (Shigella, Salmonella).', tag: 'Rheumatology' },
+  { id: 'anki_04', subject: 'Surgery', front: 'What is Charcot\'s Triad and Reynolds\' Pentad in Acute Cholangitis?', back: 'Charcot\'s Triad: Right upper quadrant pain + Jaundice + Fever with chills.\n\nReynolds\' Pentad: Charcot\'s Triad + Hypotension (Shock) + Altered Mental Status.\n\nTreatment: Urgent biliary decompression (ERCP) + IV broad-spectrum antibiotics.', tag: 'GI Surgery' },
+  { id: 'anki_05', subject: 'Surgery', front: 'What is the most common benign tumor of the liver?', back: 'Cavernous Hemangioma.\n\nPearl: Biopsy is contraindicated due to risk of severe hemorrhage. Diagnosed via MRI or contrast CT showing peripheral-to-central enhancement.', tag: 'Hepatobiliary' },
+  { id: 'anki_06', subject: 'Surgery', front: 'What are the branches of the celiac trunk?', back: '1. Left Gastric Artery\n2. Splenic Artery\n3. Common Hepatic Artery\n\nPearl: Supplies foregut structures.', tag: 'Vascular' },
+  { id: 'anki_07', subject: 'Pharmacology', front: 'What is the Drug of Choice (DOC) for Paroxysmal Supraventricular Tachycardia (PSVT)?', back: 'Drug of Choice: IV Adenosine (rapid bolus 6mg, followed by 12mg if needed).\n\nMechanism: Activates A1 adenosine receptors -> opens K+ channels -> slows AV nodal conduction.\nContraindication: Bronchial asthma / severe COPD.', tag: 'Cardiology' },
+  { id: 'anki_08', subject: 'Pharmacology', front: 'What is the antidote for Paracetamol (Acetaminophen) toxicity?', back: 'N-acetylcysteine (NAC).\n\nMechanism: Replenishes glutathione stores in the liver to neutralize the toxic NAPQI metabolite.', tag: 'Toxicology' },
+  { id: 'anki_09', subject: 'Pharmacology', front: 'Which anti-TB drug causes red-orange discoloration of bodily fluids?', back: 'Rifampin.\n\nPearl: It induces CYP450 enzymes. Warn patients about orange urine, sweat, and tears (can stain contact lenses).', tag: 'Infectious' },
+  { id: 'anki_10', subject: 'Pathology', front: 'What is the pathognomonic biopsy finding in Asbestosis?', back: 'Asbestos Bodies / Ferruginous Bodies\n(Golden-brown dumbbell-shaped beaded rods coated with iron and protein, stain positive with Prussian blue).\n\nKey Association: Malignant Mesothelioma (calretinin positive) & Bronchogenic Carcinoma (most common tumor).', tag: 'Pulmonology' },
+  { id: 'anki_11', subject: 'Pathology', front: 'What do Councilman bodies represent?', back: 'Apoptotic hepatocytes, seen typically in viral hepatitis (e.g., Yellow Fever) or toxic liver injury.\n\nPearl: Eosinophilic globules on H&E stain.', tag: 'GI' },
+  { id: 'anki_12', subject: 'Anatomy', front: 'What structure is at risk of injury during surgical ligation of the Superior Thyroid Artery?', back: 'External branch of the Superior Laryngeal Nerve (innervates the Cricothyroid muscle -> regulates vocal cord tension / pitch).\n\nInjury leads to: Loss of high-pitched voice and vocal fatigue.\n(Note: Inferior thyroid artery ligation risks the Recurrent Laryngeal Nerve).', tag: 'Head & Neck' },
+  { id: 'anki_13', subject: 'Anatomy', front: 'Which dermatome is at the level of the umbilicus?', back: 'T10.\n\nPearl: "T10 for belly button". T4 is at the nipple line. L1 is at the inguinal ligament.', tag: 'Neurology' },
+  { id: 'anki_14', subject: 'Anatomy', front: 'What nerve is injured in Erb-Duchenne palsy?', back: 'Upper trunk of the brachial plexus (C5-C6 roots).\n\nPearl: Presents as "waiter\'s tip" position: arm adducted, medially rotated, extended, and pronated.', tag: 'Upper Limb' },
+  { id: 'anki_15', subject: 'Physiology', front: 'What is the effect of Aldosterone on the kidney?', back: 'Acts on the principal cells of the collecting duct to:\n1. Increase Na+ reabsorption (and thus water)\n2. Increase K+ secretion\n3. Increase H+ secretion (via alpha-intercalated cells)', tag: 'Renal' },
+  { id: 'anki_16', subject: 'Physiology', front: 'What shifts the oxygen-hemoglobin dissociation curve to the right?', back: '"CADET face Right"\nC = pCO2 increase\nA = Acidosis (decreased pH)\nD = 2,3-DPG increase\nE = Exercise\nT = Temperature increase\n\nPearl: Right shift means decreased affinity, facilitating oxygen unloading to tissues.', tag: 'Respiratory' },
+  { id: 'anki_17', subject: 'Biochemistry', front: 'What enzyme is deficient in McArdle Disease (Glycogen Storage Disease Type V)?', back: 'Enzyme Deficient: Muscle Glycogen Phosphorylase (Myophosphorylase).\n\nClinical Presentation: Painful muscle cramps, exercise intolerance, second-wind phenomenon, myoglobinuria (burgundy urine after strenuous exercise).\nBlood test: Failure of blood lactate to rise after ischemic forearm exercise.', tag: 'Metabolism' },
+  { id: 'anki_18', subject: 'Biochemistry', front: 'What is the rate-limiting enzyme of glycolysis?', back: 'Phosphofructokinase-1 (PFK-1).\n\nPearl: Activated by AMP and Fructose-2,6-bisphosphate; inhibited by ATP and citrate.', tag: 'Carbohydrates' },
+  { id: 'anki_19', subject: 'Microbiology', front: 'What is the hallmark microscopic feature of Rabies viral infection?', back: 'Negri Bodies\n(Eosinophilic, sharply demarcated, intracytoplasmic inclusions found in the pyramidal cells of the hippocampus and Purkinje cells of the cerebellum).', tag: 'Virology' },
+  { id: 'anki_20', subject: 'Microbiology', front: 'Which organism classically shows a "safety pin" appearance on Gram stain?', back: 'Yersinia pestis.\n\nPearl: Bipolar staining. Causes bubonic plague, transmitted by rat fleas.', tag: 'Bacteriology' },
+  { id: 'anki_21', subject: 'OBGY', front: 'What is the diagnostic ultrasound sign of a Complete Hydatidiform Mole?', back: '"Snowstorm" or "Bunch of Grapes" appearance on pelvic ultrasound (vesicular echogenic mass without fetal parts).\n\nKaryotype: 46,XX (90%) — androgenetic origin.\nTumor Marker: Markedly elevated serum beta-hCG (>100,000 mIU/mL).', tag: 'Obstetrics' },
+  { id: 'anki_22', subject: 'OBGY', front: 'What is the most common cause of postpartum hemorrhage?', back: 'Uterine Atony (boggy uterus).\n\nPearl: Management involves fundal massage, Oxytocin, Methylergonovine (avoid in HTN), Carboprost (avoid in asthma), or Misoprostol.', tag: 'Obstetrics' },
+  { id: 'anki_23', subject: 'OBGY', front: 'What is the triad of endometriosis?', back: '1. Dysmenorrhea\n2. Dyspareunia\n3. Dyschezia (painful defecation) / Infertility\n\nPearl: Classic "chocolate cysts" in ovaries.', tag: 'Gynecology' },
+  { id: 'anki_24', subject: 'Pediatrics', front: 'What are the classic radiographic signs in (A) Croup and (B) Epiglottitis?', back: 'A) Croup (Laryngotracheobronchitis):\n-> Steeple Sign (subglottic tracheal narrowing on AP X-ray).\n\nB) Acute Epiglottitis:\n-> Thumbprint Sign (swollen epiglottis on Lateral Neck X-ray).\n\nEtiology: Croup = Parainfluenza; Epiglottitis = H. influenzae type b.', tag: 'Pediatrics' },
+  { id: 'anki_25', subject: 'Pediatrics', front: 'What is the most common cause of congenital hypothyroidism?', back: 'Thyroid dysgenesis (agenesis, hypoplasia, or ectopic tissue).\n\nPearl: Presents with lethargy, large fontanelles, protruding tongue, umbilical hernia.', tag: 'Endocrine' },
+  { id: 'anki_26', subject: 'Pediatrics', front: 'What is the triad of intussusception?', back: '1. Colicky abdominal pain\n2. "Currant jelly" stools\n3. Palpable sausage-shaped abdominal mass\n\nPearl: Target sign on ultrasound.', tag: 'GI' },
+  { id: 'anki_27', subject: 'Ophthalmology', front: 'What does a "cherry-red spot" on the macula signify?', back: 'Central Retinal Artery Occlusion (CRAO) or Tay-Sachs/Niemann-Pick disease.\n\nPearl: In CRAO, it\'s accompanied by sudden, painless monocular vision loss.', tag: 'Retina' },
+  { id: 'anki_28', subject: 'Ophthalmology', front: 'What is a Marcus Gunn pupil?', back: 'An Afferent Pupillary Defect (RAPD).\n\nPearl: When light is swung from the normal eye to the affected eye, both pupils appear to dilate instead of constrict. Often seen in optic neuritis (MS).', tag: 'Neuro-Ophtho' },
+  { id: 'anki_29', subject: 'ENT', front: 'What is the triad of Meniere\'s disease?', back: '1. Episodic vertigo\n2. Sensorineural hearing loss\n3. Tinnitus (or aural fullness).\n\nPearl: Due to endolymphatic hydrops.', tag: 'Otology' },
+  { id: 'anki_30', subject: 'ENT', front: 'What is a Bezold abscess?', back: 'A complication of coalescent mastoiditis where infection tracks through the mastoid tip into the sternocleidomastoid muscle sheath.\n\nPearl: Presents as a neck mass below the mastoid.', tag: 'Otology' },
+  { id: 'anki_31', subject: 'Ortho', front: 'What is the classic X-ray finding in Ewing sarcoma?', back: '"Onion skin" periosteal reaction.\n\nPearl: Aggressive diaphysis tumor in children, associated with t(11;22) translocation.', tag: 'Tumors' },
+  { id: 'anki_32', subject: 'Ortho', front: 'What does the Garden classification assess?', back: 'Femoral neck fractures.\n\nPearl: Higher grades (III, IV) are displaced and have a high risk of avascular necrosis of the femoral head, often requiring arthroplasty.', tag: 'Trauma' },
+  { id: 'anki_33', subject: 'PSM', front: 'What is the difference between Case Fatality Rate and Cause-Specific Mortality Rate?', back: 'Case Fatality Rate = (Deaths from disease X / Total cases of disease X) * 100.\n\nMortality Rate = (Deaths from disease X / Total population) * 1000.', tag: 'Epidemiology' },
+  { id: 'anki_34', subject: 'PSM', front: 'What is the formula for calculating positive predictive value (PPV)?', back: 'PPV = True Positives / (True Positives + False Positives)\n\nPearl: PPV is highly dependent on the prevalence of the disease in the population.', tag: 'Biostats' },
+  { id: 'anki_35', subject: 'Dermatology', front: 'What is Nikolsky\'s sign, and in which blistering diseases is it positive vs negative?', back: 'Nikolsky\'s Sign: Dislodgement of superficial epidermis by gentle lateral pressure.\n\nPositive (Intraepidermal split): Pemphigus vulgaris (anti-desmoglein 3/1), SSSS, TEN.\n\nNegative (Subepidermal split): Bullous Pemphigoid (anti-BP180 / BP230)', tag: 'Dermatology' },
+  { id: 'anki_36', subject: 'Dermatology', front: 'What is the Auspitz sign?', back: 'Pinpoint bleeding upon removal of scales from a plaque.\n\nPearl: Pathognomonic for Psoriasis (due to dilated capillaries in the dermal papillae).', tag: 'Dermatology' },
+  { id: 'anki_37', subject: 'Psychiatry', front: 'What are the core features of Lewy Body Dementia?', back: '1. Visual hallucinations\n2. Parkinsonism (often preceded by cognitive decline)\n3. Fluctuating cognition\n4. REM sleep behavior disorder', tag: 'Cognitive' },
+  { id: 'anki_38', subject: 'Psychiatry', front: 'What is the timeline for diagnosing Schizophrenia?', back: 'Symptoms must be present for at least 6 months.\n\nPearl: <1 month = Brief Psychotic Disorder.\n1-6 months = Schizophreniform Disorder.', tag: 'Psychosis' },
+  { id: 'anki_39', subject: 'Radiology', front: 'What does a "ground-glass opacity" on HRCT suggest?', back: 'Partial filling of alveoli or interstitial thickening without obscuring the underlying pulmonary vessels.\n\nPearl: Seen in ARDS, PCP pneumonia, hypersensitivity pneumonitis, and COVID-19.', tag: 'Chest' },
+  { id: 'anki_40', subject: 'Forensic Medicine', front: 'How is Rigor Mortis timed?', back: 'Starts in 1-2 hours (involves eyelids/jaw first), peaks at 12 hours, and passes off by 24-36 hours.\n\nPearl: Used to estimate time since death.', tag: 'Thanatology' },
+  { id: 'anki_41', subject: 'Anaesthesia', front: 'What is the Mallampati score used for?', back: 'Predicting the ease of endotracheal intubation based on the visibility of the base of the uvula, faucial pillars, and soft palate.\n\nPearl: Class 1 = full visibility (easy); Class 4 = only hard palate visible (difficult).', tag: 'Airway' }
 ];
 
 let currentCardIndex = 0;
