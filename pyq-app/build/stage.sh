@@ -43,22 +43,25 @@ python3 "$APP/build/build_index.py" --src "$SRC_ASSETS" --out "$APP/data"
 echo "==> Verifying the question index"
 python3 "$APP/build/verify_index.py" --dir "$APP/data"
 
+echo "==> Building the case simulator (base ${SITE_BASE}simulator/)"
+if [ ! -d "$REPO/node_modules" ]; then
+  echo "    installing dependencies"
+  (cd "$REPO" && npm ci --silent)
+fi
+SIM_TMP="$REPO/.sim-dist"
+rm -rf "$SIM_TMP"
+(cd "$REPO" && VITE_BASE_PATH="${SITE_BASE}simulator/" npx vite build --outDir "$SIM_TMP" --emptyOutDir --silent)
+
 echo "==> Staging the PYQ app"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 cp "$APP/index.html" "$APP/manifest.webmanifest" "$APP/sw.js" "$OUT/"
 cp -r "$APP/src" "$APP/icons" "$APP/data" "$OUT/"
 
-echo "==> Building the case simulator (base ${SITE_BASE}simulator/)"
-if [ ! -d "$REPO/node_modules" ]; then
-  echo "    installing dependencies"
-  (cd "$REPO" && npm ci --silent)
-fi
-(cd "$REPO" && VITE_BASE_PATH="${SITE_BASE}simulator/" npm run build --silent)
-
 echo "==> Staging the case simulator"
 mkdir -p "$OUT/simulator"
-cp -r "$REPO/dist/." "$OUT/simulator/"
+cp -r "$SIM_TMP/." "$OUT/simulator/"
+rm -rf "$SIM_TMP"
 
 echo
 echo "Staged $(du -sh "$OUT" | cut -f1) into $OUT"

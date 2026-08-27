@@ -23,26 +23,38 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - run: npm ci
 
-      - name: Typecheck
+      - name: Typecheck case simulator
         run: npm run lint
 
-      - name: Test
+      - name: Test case simulator
         run: npm test
 
-      - name: Build
-        # Project sites are served from /<repo>/, so the base path has to match
-        # the real repository name rather than being hardcoded.
-        env:
-          VITE_BASE_PATH: /${{ github.event.repository.name }}/
-        run: npm run build
+      - name: Engine and sanitizer unit tests
+        working-directory: pyq-app
+        run: node --test
 
-      - name: Add SPA 404 fallback
-        run: cp dist/index.html dist/404.html
+      # The question bank lives in a separate repository and is never vendored here.
+      - name: Fetch the question bank
+        run: git clone --depth 1 https://github.com/koushalterupally-source/Medqbank /tmp/medqbank
+
+      - name: Build and stage unified product
+        env:
+          SITE_BASE: /${{ github.event.repository.name }}/
+        run: bash pyq-app/build/stage.sh /tmp/medqbank/android/app/src/main/assets dist
+
+      - name: Add SPA 404 fallbacks
+        run: |
+          cp dist/index.html dist/404.html
+          cp dist/simulator/index.html dist/simulator/404.html
 
       - uses: actions/configure-pages@v5
         with:

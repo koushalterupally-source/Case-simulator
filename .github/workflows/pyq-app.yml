@@ -4,25 +4,47 @@ on:
   push:
     paths:
       - 'pyq-app/**'
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'package.json'
       - '.github/workflows/pyq-app.yml'
   pull_request:
     paths:
       - 'pyq-app/**'
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'package.json'
       - '.github/workflows/pyq-app.yml'
   workflow_dispatch:
 
 jobs:
   unit:
-    name: Engine and sanitizer tests
+    name: Engine, simulator and sanitizer tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Node's own test runner; the app has no dependencies and no build step.
-      - run: node --test
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck case simulator
+        run: npm run lint
+
+      - name: Test case simulator
+        run: npm test
+
+      - name: Engine and sanitizer unit tests
         working-directory: pyq-app
+        run: node --test
 
   pipeline:
     name: Data pipeline and end-to-end
@@ -33,37 +55,35 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
+      - name: Install dependencies
+        run: npm ci
+
       # The question bank lives in a separate repository and is never vendored here.
       - name: Fetch the question bank
         run: git clone --depth 1 https://github.com/koushalterupally-source/Medqbank /tmp/medqbank
 
-      - name: Build the index
-        working-directory: pyq-app
-        run: python3 build/build_index.py --src /tmp/medqbank/android/app/src/main/assets --out data
+      - name: Build and stage unified product
+        run: bash pyq-app/build/stage.sh /tmp/medqbank/android/app/src/main/assets dist
 
-      - name: Verify the index
-        working-directory: pyq-app
-        run: python3 build/verify_index.py --dir data
-
-      - name: Install Chromium
-        run: npx --yes playwright@1.56.1 install --with-deps chromium
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx --yes playwright@1.56.1 install --with-deps chromium
 
       - name: End-to-end smoke test
-        working-directory: pyq-app
-        env:
-          PYQ_CHROMIUM: ''
-        run: node tests/smoke.mjs
+        run: node pyq-app/tests/smoke.mjs --root dist --shots dist/.shots
 
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pyq-app-screens
-          path: pyq-app/.shots
+          path: dist/.shots
           retention-days: 14
           if-no-files-found: ignore

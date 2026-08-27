@@ -52,12 +52,16 @@ self.addEventListener('install', (event) => {
   );
 });
 
+const CACHE_PREFIXES = ['pyq-shell-', 'pyq-data-'];
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE).map((k) => caches.delete(k))
+        keys
+          .filter((k) => CACHE_PREFIXES.some((p) => k.startsWith(p)) && k !== SHELL_CACHE && k !== DATA_CACHE)
+          .map((k) => caches.delete(k))
       );
       await self.clients.claim();
     })()
