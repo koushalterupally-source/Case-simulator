@@ -87,7 +87,7 @@ function paintClock() {
 
   // Announce the two warnings once each.
   const marks = state.warned || (state.warned = {});
-  if (left <= WARN_SOON_MS && !marks.soon) {
+  if (state.session.durationMs > WARN_SOON_MS && left <= WARN_SOON_MS && !marks.soon) {
     marks.soon = true;
     ui.toast('10 minutes remaining');
   }
@@ -390,6 +390,7 @@ async function finish(auto) {
     ui.navigate('analysis', { sessionId: result.sessionId, auto: auto ? '1' : '' });
   } catch (err) {
     state.finishing = false;
+    if (state && !state.ticker) state.ticker = setInterval(tick, TICK_MS);
     console.error('Submit failed', err);
     ui.toast('Could not score the paper — your answers are saved');
     throw err;

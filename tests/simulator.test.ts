@@ -1,5 +1,13 @@
 import { parseRawQBankTextOffline } from '../src/utils/qbankParser';
-import { addMinutesToSimTime, processTurnOffline, generateScorecard, splitOrders, inferOrderCategory } from '../src/utils/ccsEngine';
+import {
+  addMinutesToSimTime,
+  processTurnOffline,
+  generateScorecard,
+  splitOrders,
+  inferOrderCategory,
+  simTimeToMinutes,
+  formatSimTime,
+} from '../src/utils/ccsEngine';
 import { buildCaseSessionFromScaffold } from '../src/utils/caseBinder';
 import { exportQBankToJSON, importQBankFromJSON } from '../src/utils/qbankParser';
 import { DEFAULT_PYQ_INDEX } from '../src/data/defaultQBank';
@@ -11,8 +19,12 @@ import {
   computeGameStats,
   hrSeverity,
   spo2Severity,
+  rrSeverity,
   bpSeverity,
   tempSeverity,
+  grbsSeverity,
+  instabilityScore,
+  stabilityLabel,
 } from '../src/utils/gamification';
 import { CaseSession, PYQItem } from '../src/types';
 
@@ -268,6 +280,117 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
   const exported = exportQBankToJSON(DEFAULT_PYQ_INDEX);
   const reimported = importQBankFromJSON(exported);
   assert(reimported.length === DEFAULT_PYQ_INDEX.length, 'Reimported QBank matches exported item count');
+
+  // 6. Vitals Decay & Trajectory Dynamics
+  console.log('\n--- Test Suite 6: Vitals Decay & Trajectory Dynamics ---');
+  const stemiSession = buildCaseSessionFromScaffold(DEFAULT_PYQ_INDEX, { scaffoldId: 'scaffold_stemi', mode: 'standard' });
+  const initialHr = stemiSession.patient.currentVitals.hr;
+  const initialSpo2 = stemiSession.patient.currentVitals.spo2;
+
+  // Advance clock past critical milestone (STEMI DAPT window is 20 min) without ordering DAPT
+  const delayedSession = processTurnOffline(stemiSession, 'advance 45 minutes');
+  assert(delayedSession.patient.currentVitals.hr > initialHr, 'Heart rate deteriorates (climbs) when critical intervention is overdue');
+  assert(delayedSession.patient.currentVitals.spo2 < initialSpo2, 'Oxygen saturation deteriorates (falls) when critical intervention is overdue');
+  assert(delayedSession.turns[delayedSession.turns.length - 1].whatHappened.includes('deteriorating'), 'Deterioration warning added to turn narrative');
+
+  // Ordering critical intervention improves vitals
+  const treatedSession = processTurnOffline(delayedSession, 'order: Aspirin 325 mg chewed, Clopidogrel 300 mg loading');
+  assert(treatedSession.patient.currentVitals.hr < delayedSession.patient.currentVitals.hr, 'Heart rate recovers after critical intervention');
+  assert(treatedSession.patient.currentVitals.spo2 > delayedSession.patient.currentVitals.spo2, 'Oxygenation recovers after critical intervention');
+
+  // Question-led cases must NEVER suffer trajectory decay
+  const qLedDecayCheck = processTurnOffline(qCase, 'advance 120 minutes');
+  assert(qLedDecayCheck.patient.currentVitals.hr === 0, 'Question-led set maintains 0 HR (no phantom deterioration)');
+  assert(qLedDecayCheck.patient.currentVitals.spo2 === 0, 'Question-led set maintains 0 SpO2 (no phantom decay)');
+  assert(!qLedDecayCheck.turns[qLedDecayCheck.turns.length - 1].whatHappened.includes('deteriorating'), 'Question-led case emits no deterioration warning');
+
+  // 7. Order Result Turnaround & Delivery Pipeline
+  console.log('\n--- Test Suite 7: Order Result Turnaround & Delivery Pipeline ---');
+  const freshSession = buildCaseSessionFromScaffold(DEFAULT_PYQ_INDEX, { scaffoldId: 'scaffold_stemi', mode: 'standard' });
+  const withOrders = processTurnOffline(freshSession, 'order: 12-lead ECG, STAT Troponin I, Chest X-ray PA');
+  // Order entry for 3 items takes 5 minutes (09:00 -> 09:05), so 5-minute ECG delivers at end of turn 1
+  assert(withOrders.completedOrders.some((o) => /ecg/i.test(o.orderName)), '5-minute ECG delivers once sim clock reaches 09:05');
+  assert(withOrders.pendingOrders.length === 2, 'Remaining 2 slower orders (Troponin 30m, CXR 20m) remain queued in pendingOrders');
+
+  // Advance time by 15 mins (09:05 -> 09:20): CXR (20m turnaround, ready 09:20) delivers
+  const after15Mins = processTurnOffline(withOrders, 'advance 15 minutes');
+  const cxrDone = after15Mins.completedOrders.some((o) => /cxr|chest x-ray/i.test(o.orderName));
+  assert(cxrDone, 'Medium turnaround order (CXR PA, 20m) moves to completedOrders at 09:20');
+  assert(after15Mins.pendingOrders.some((o) => /troponin/i.test(o.orderName)), '30-minute Troponin remains pending at 09:20');
+
+  // Advancing time past 09:30 delivers Troponin
+  const after30Mins = processTurnOffline(after15Mins, 'advance 15 minutes');
+  assert(after30Mins.pendingOrders.length === 0, 'All pending orders delivered after sufficient turnaround (09:35 >= 09:30)');
+  assert(after30Mins.completedOrders.length === 3, 'All 3 orders now in completedOrders');
+  assert(after30Mins.turns[after30Mins.turns.length - 1].newResults.length > 0, 'Turn recorded delivered results');
+
+  // Incidental finding discovery via investigation
+  const incBefore = freshSession.incidentalFindings[0]?.status;
+  const withImaging = processTurnOffline(freshSession, 'order: USG Abdomen & Pelvis, Chest X-ray portable');
+  const incAfter = withImaging.incidentalFindings.some((i) => i.status === 'noticed_addressed');
+  assert(incBefore === 'unnoticed' && incAfter, 'Ordering relevant imaging discovers and addresses incidental finding');
+
+  // 8. Scorecard Generation & Grading
+  console.log('\n--- Test Suite 8: Scorecard Generation & Grading ---');
+  const scoredSession = buildCaseSessionFromScaffold(DEFAULT_PYQ_INDEX, { scaffoldId: 'scaffold_stemi', mode: 'standard' });
+  // Answer all gates correctly
+  let fullSession = scoredSession;
+  for (let g = 0; g < fullSession.decisionGates.length; g++) {
+    const ans = fullSession.decisionGates[g].pyq.correctAnswer;
+    fullSession = processTurnOffline(fullSession, undefined, ans, g);
+  }
+  const perfectCard = generateScorecard(fullSession);
+  assert(perfectCard.pyqScore.percentage === 100, 'All correct gates yields 100% PYQ score');
+  assert(perfectCard.overallGrade === 'S' || perfectCard.overallGrade === 'A', 'Perfect gate run earns high grade (S/A)');
+  assert(perfectCard.finalDiagnosis.includes('STEMI'), 'Scorecard includes correct final diagnosis');
+  assert(perfectCard.clinchingClue.length > 0, 'Scorecard includes clinching clue');
+
+  // Question-led scorecard
+  let qLedRun = qCase;
+  for (let g = 0; g < qLedRun.decisionGates.length; g++) {
+    const ans = qLedRun.decisionGates[g].pyq.correctAnswer;
+    qLedRun = processTurnOffline(qLedRun, undefined, ans, g);
+  }
+  const qScorecard = generateScorecard(qLedRun);
+  assert(qScorecard.pyqScore.percentage === 100, 'Question-led scorecard scores 100% for all correct');
+  assert(qScorecard.overOrderingList.length === 0, 'Question-led scorecard has zero unmodeled order penalties');
+  assert(qScorecard.criticalDelays.length === 0, 'Question-led scorecard has zero critical delays');
+  assert(qScorecard.overallScore === 100, 'Question-led overallScore matches pyq percentage');
+
+  // 9. Simulation Control Commands & State Transitions
+  console.log('\n--- Test Suite 9: Simulation Control Commands & State Transitions ---');
+  const ctrlSession = buildCaseSessionFromScaffold(DEFAULT_PYQ_INDEX, { scaffoldId: 'scaffold_stemi', mode: 'standard' });
+  
+  // Pause command
+  const paused = processTurnOffline(ctrlSession, 'pause');
+  assert(paused.status === 'paused', 'Command "pause" sets session status to paused');
+
+  // Transfer command
+  const transferred = processTurnOffline(ctrlSession, 'move to ICU');
+  assert(transferred.currentLocation === 'ICU', 'Command "move to ICU" updates currentLocation to ICU');
+
+  // End case command
+  const ended = processTurnOffline(ctrlSession, 'end case');
+  assert(ended.status === 'completed', 'Command "end case" sets session status to completed');
+  assert(ended.scorecard !== undefined, 'Command "end case" generates scorecard automatically');
+
+  // History and Physical Exam commands
+  const withHx = processTurnOffline(ctrlSession, 'hx: allergies');
+  assert(withHx.historyLog.length === 1, 'Command "hx: allergies" appends to historyLog');
+  const withPe = processTurnOffline(ctrlSession, 'pe: cvs');
+  assert(withPe.examLog.length === 1, 'Command "pe: cvs" appends to examLog');
+
+  // 10. Gamification Edge Cases & Stability
+  console.log('\n--- Test Suite 10: Gamification Edge Cases & Stability ---');
+  assert(instabilityScore(qCase) === 0, 'Question-led case instabilityScore is 0 (Stable)');
+  assert(stabilityLabel(0).label === 'STABLE', 'Score 0 produces STABLE stability label');
+  assert(stabilityLabel(6).label === 'CRITICAL', 'Score 6 produces CRITICAL stability label');
+  assert(stabilityLabel(3).label === 'UNSTABLE', 'Score 3 produces UNSTABLE stability label');
+  assert(stabilityLabel(1).label === 'GUARDED', 'Score 1 produces GUARDED stability label');
+  assert(hrSeverity(0) === 'normal', '0 HR returns normal');
+  assert(spo2Severity(0) === 'normal', '0 SpO2 returns normal');
+  assert(rrSeverity(0) === 'normal', '0 RR returns normal');
+  assert(grbsSeverity(0) === 'normal', '0 GRBS returns normal');
 
   console.log(`\n🎉 Verification Suite Complete: ${passed} Passed, ${failed} Failed.`);
   if (failed > 0) {

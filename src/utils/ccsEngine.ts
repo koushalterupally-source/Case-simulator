@@ -242,7 +242,15 @@ export function processTurnOffline(
     else if (cmdLower.startsWith('move to') || cmdLower.startsWith('transfer to')) {
       const locMatch = userCommand.match(/(?:move|transfer)\s+to\s+(Emergency|OPD|Ward|ICU|OT|Home)/i);
       if (locMatch) {
-        const newLoc = (locMatch[1].charAt(0).toUpperCase() + locMatch[1].slice(1).toLowerCase()) as LocationType;
+        const rawLoc = locMatch[1].toUpperCase();
+        let newLoc: LocationType = 'Ward';
+        if (rawLoc === 'EMERGENCY') newLoc = 'Emergency';
+        else if (rawLoc === 'OPD') newLoc = 'OPD';
+        else if (rawLoc === 'WARD') newLoc = 'Ward';
+        else if (rawLoc === 'ICU') newLoc = 'ICU';
+        else if (rawLoc === 'OT') newLoc = 'OT';
+        else if (rawLoc === 'HOME') newLoc = 'Home';
+
         updatedSession.currentLocation = newLoc;
         timeSpentMins = 15;
         narrative = `Patient transferred to ${newLoc}. Clinical team updated.`;
@@ -354,6 +362,7 @@ export function processTurnOffline(
           isReady: false,
           resultText,
           turnaroundMinutes: turnaround,
+          orderedTurnIndex: updatedSession.turns.length,
         });
 
         placedLines.push(`${orderName} — ready ${readySimTimeStr}`);
@@ -404,42 +413,44 @@ export function processTurnOffline(
 
   updatedSession.pendingOrders = remainingPending;
 
-  // 5. Evaluate Trajectory & Patient Deterioration
-  const allPlaced = [...updatedSession.completedOrders, ...updatedSession.pendingOrders];
-  const totalElapsedMinutes = currentTotalMinutes - simTimeToMinutes({ day: 1, hour: 9, minute: 0 });
+  // 5. Evaluate Trajectory & Patient Deterioration (Scaffold cases only)
+  if (!updatedSession.isQuestionLed) {
+    const allPlaced = [...updatedSession.completedOrders, ...updatedSession.pendingOrders];
+    const totalElapsedMinutes = currentTotalMinutes - simTimeToMinutes({ day: 1, hour: 9, minute: 0 });
 
-  // An intervention counts as done if it was ordered directly OR delivered by
-  // answering the decision gate that represents it. Checking orders alone meant
-  // a player who answered every gate correctly still watched the patient
-  // deteriorate for treatment the narrative said they had already given.
-  const gateDelivered = updatedSession.decisionGates
-    .filter((g) => g.userAnswer !== undefined && g.isCorrect)
-    .map((g) => `${g.consequenceMessage || ''} ${g.patientContext || ''}`)
-    .join(' ');
+    // An intervention counts as done if it was ordered directly OR delivered by
+    // answering the decision gate that represents it. Checking orders alone meant
+    // a player who answered every gate correctly still watched the patient
+    // deteriorate for treatment the narrative said they had already given.
+    const gateDelivered = updatedSession.decisionGates
+      .filter((g) => g.userAnswer !== undefined && g.isCorrect)
+      .map((g) => `${g.consequenceMessage || ''} ${g.patientContext || ''}`)
+      .join(' ');
 
-  scaffold.criticalInterventions.forEach((critical) => {
-    const executed =
-      allPlaced.some((o) => critical.orderOrActionPattern.test(o.orderName)) ||
-      critical.orderOrActionPattern.test(gateDelivered);
+    scaffold.criticalInterventions.forEach((critical) => {
+      const executed =
+        allPlaced.some((o) => critical.orderOrActionPattern.test(o.orderName)) ||
+        critical.orderOrActionPattern.test(gateDelivered);
 
-    // Warn once, when it first goes overdue — not on every turn forever.
-    const alreadyWarned = updatedSession.turns.some((t) =>
-      (t.whatHappened || '').includes(critical.name.toLowerCase())
-    );
+      // Warn once, when it first goes overdue — not on every turn forever.
+      const alreadyWarned = updatedSession.turns.some((t) =>
+        (t.whatHappened || '').includes(critical.name.toLowerCase())
+      );
 
-    if (!executed && totalElapsedMinutes > critical.targetMilestoneMinutes) {
-      // Deteriorate vitals!
-      updatedSession.patient.currentVitals.hr = Math.min(180, updatedSession.patient.currentVitals.hr + 4);
-      updatedSession.patient.currentVitals.spo2 = Math.max(70, updatedSession.patient.currentVitals.spo2 - 2);
-      if (!alreadyWarned) {
-        narrative += `\n\nThe patient is deteriorating: ${critical.name.toLowerCase()} is now overdue against a ${critical.targetMilestoneMinutes}-minute window. Heart rate is climbing and oxygenation is falling.`;
+      if (!executed && totalElapsedMinutes > critical.targetMilestoneMinutes) {
+        // Deteriorate vitals!
+        updatedSession.patient.currentVitals.hr = Math.min(180, updatedSession.patient.currentVitals.hr + 4);
+        updatedSession.patient.currentVitals.spo2 = Math.max(70, updatedSession.patient.currentVitals.spo2 - 2);
+        if (!alreadyWarned) {
+          narrative += `\n\nThe patient is deteriorating: ${critical.name.toLowerCase()} is now overdue against a ${critical.targetMilestoneMinutes}-minute window. Heart rate is climbing and oxygenation is falling.`;
+        }
+      } else if (executed) {
+        // Improve vitals
+        updatedSession.patient.currentVitals.hr = Math.max(72, updatedSession.patient.currentVitals.hr - 2);
+        updatedSession.patient.currentVitals.spo2 = Math.min(99, updatedSession.patient.currentVitals.spo2 + 1);
       }
-    } else if (executed) {
-      // Improve vitals
-      updatedSession.patient.currentVitals.hr = Math.max(72, updatedSession.patient.currentVitals.hr - 2);
-      updatedSession.patient.currentVitals.spo2 = Math.min(99, updatedSession.patient.currentVitals.spo2 + 1);
-    }
-  });
+    });
+  }
 
   // 6. Record Turn
   const newTurn: SimTurn = {
@@ -523,7 +534,36 @@ export function generateScorecard(session: CaseSession): EndOfCaseScorecard {
     sourceQIDs: [m.qid],
   }));
 
-  // Calculate Overall Score
+  if (session.isQuestionLed) {
+    let qGrade: 'S' | 'A' | 'B' | 'C' | 'F' = 'B';
+    if (pyqPercentage >= 90) qGrade = 'S';
+    else if (pyqPercentage >= 75) qGrade = 'A';
+    else if (pyqPercentage >= 60) qGrade = 'B';
+    else if (pyqPercentage >= 45) qGrade = 'C';
+    else qGrade = 'F';
+
+    return {
+      finalDiagnosis: '',
+      clinchingClue: '',
+      clinchingTime: '',
+      pyqScore: {
+        correct: correctGates,
+        total: totalGates,
+        percentage: pyqPercentage,
+      },
+      gateResults,
+      incidentalFindingsReport: [],
+      criticalDelays: [],
+      overOrderingList: [],
+      preventionChecklist: [],
+      topConceptsToRevise,
+      overallGrade: qGrade,
+      overallScore: pyqPercentage,
+      summaryFeedback: `Completed question-led set. Solved ${correctGates}/${totalGates} questions correctly (${pyqPercentage}%). Grade: ${qGrade}.`,
+    };
+  }
+
+  // Calculate Overall Score for scaffold simulation
   const overOrderingPenalty = overOrders.length * 5;
   const rawScore = Math.round((correctGates / totalGates) * 80 + addressedIncCount * 10 - overOrderingPenalty);
   const overallScore = Math.min(100, Math.max(0, rawScore));

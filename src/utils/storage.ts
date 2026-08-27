@@ -9,7 +9,7 @@ const DB_VERSION = 1;
  */
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    if (!window.indexedDB) {
+    if (typeof window === 'undefined' || !window.indexedDB) {
       reject(new Error('IndexedDB not supported'));
       return;
     }
@@ -46,10 +46,12 @@ export async function saveActiveSession(session: CaseSession): Promise<void> {
     store.put({ id: 'CURRENT_ACTIVE', session });
   } catch (err) {
     // Fallback to localStorage
-    try {
-      localStorage.setItem('medtrix_active_session', JSON.stringify(session));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded', e);
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('medtrix_active_session', JSON.stringify(session));
+      } catch (e) {
+        console.warn('LocalStorage quota exceeded', e);
+      }
     }
   }
 }
@@ -80,6 +82,7 @@ export async function loadActiveSession(): Promise<CaseSession | null> {
 }
 
 function loadActiveSessionFromLocalStorage(): CaseSession | null {
+  if (typeof localStorage === 'undefined') return null;
   try {
     const raw = localStorage.getItem('medtrix_active_session');
     if (!raw) return null;
@@ -107,11 +110,13 @@ export async function saveQBankIndex(index: PYQItem[]): Promise<void> {
     });
   } catch (err) {
     console.warn('Failed to save QBank index to IndexedDB, attempting fallback:', err);
-    try {
-      // Save only a sample/slice to localStorage to prevent QuotaExceededError
-      localStorage.setItem('medtrix_pyq_index_sample', JSON.stringify(index.slice(0, 50)));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded saving sample qbank');
+    if (typeof localStorage !== 'undefined') {
+      try {
+        // Save only a sample/slice to localStorage to prevent QuotaExceededError
+        localStorage.setItem('medtrix_pyq_index_sample', JSON.stringify(index.slice(0, 50)));
+      } catch (e) {
+        console.warn('LocalStorage quota exceeded saving sample qbank');
+      }
     }
   }
 }
@@ -142,6 +147,7 @@ export async function loadQBankIndex(): Promise<PYQItem[]> {
 }
 
 function loadQBankFromLocalStorage(): PYQItem[] {
+  if (typeof localStorage === 'undefined') return DEFAULT_PYQ_INDEX;
   try {
     const raw = localStorage.getItem('medtrix_pyq_index');
     if (!raw) return DEFAULT_PYQ_INDEX;
@@ -163,13 +169,15 @@ export async function saveCompletedCase(session: CaseSession): Promise<void> {
     const store = tx.objectStore('case_history');
     store.put(session);
   } catch (err) {
-    try {
-      const historyRaw = localStorage.getItem('medtrix_case_history') || '[]';
-      const history: CaseSession[] = JSON.parse(historyRaw);
-      history.push(session);
-      localStorage.setItem('medtrix_case_history', JSON.stringify(history.slice(-20))); // Keep last 20
-    } catch (e) {
-      console.warn('Failed to save completed case to localStorage', e);
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const historyRaw = localStorage.getItem('medtrix_case_history') || '[]';
+        const history: CaseSession[] = JSON.parse(historyRaw);
+        history.push(session);
+        localStorage.setItem('medtrix_case_history', JSON.stringify(history.slice(-20))); // Keep last 20
+      } catch (e) {
+        console.warn('Failed to save completed case to localStorage', e);
+      }
     }
   }
 }
@@ -196,6 +204,7 @@ export async function loadCaseHistory(): Promise<CaseSession[]> {
 }
 
 function loadHistoryFromLocalStorage(): CaseSession[] {
+  if (typeof localStorage === 'undefined') return [];
   try {
     const raw = localStorage.getItem('medtrix_case_history');
     if (raw) {

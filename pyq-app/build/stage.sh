@@ -26,10 +26,21 @@ if [ $# -ne 2 ]; then
 fi
 
 SRC_ASSETS="$1"
+mkdir -p "$(dirname "$2")"
 OUT="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
+if [ -d "$OUT" ]; then
+  OUT="$(cd "$OUT" && pwd)"
+fi
 APP="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="$(cd "$APP/.." && pwd)"
 SITE_BASE="${SITE_BASE:-/}"
+
+case "$OUT" in
+  ""|"/"|"//"|"$REPO"|"$APP"|"${HOME:-}"|"/bin"|"/boot"|"/dev"|"/etc"|"/home"|"/lib"|"/lib64"|"/opt"|"/proc"|"/root"|"/run"|"/sbin"|"/sys"|"/usr"|"/var")
+    echo "error: unsafe output directory: $OUT" >&2
+    exit 64
+    ;;
+esac
 
 if [ ! -d "$SRC_ASSETS/pyq" ] || [ ! -d "$SRC_ASSETS/cereb" ]; then
   echo "error: $SRC_ASSETS does not look like the Medqbank assets directory" >&2

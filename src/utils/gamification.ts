@@ -199,18 +199,21 @@ export function computeGameStats(session: CaseSession): GameStats {
 export type VitalSeverity = 'normal' | 'warning' | 'critical';
 
 export function hrSeverity(hr: number): VitalSeverity {
+  if (!hr || hr <= 0) return 'normal';
   if (hr >= 130 || hr <= 45) return 'critical';
   if (hr > 110 || hr < 60) return 'warning';
   return 'normal';
 }
 
 export function spo2Severity(spo2: number): VitalSeverity {
+  if (!spo2 || spo2 <= 0) return 'normal';
   if (spo2 < 90) return 'critical';
   if (spo2 < 94) return 'warning';
   return 'normal';
 }
 
 export function rrSeverity(rr: number): VitalSeverity {
+  if (!rr || rr <= 0) return 'normal';
   if (rr >= 30 || rr <= 8) return 'critical';
   if (rr > 22 || rr < 12) return 'warning';
   return 'normal';
@@ -246,6 +249,7 @@ export function grbsSeverity(grbs: number | string): VitalSeverity {
   const m = String(grbs).match(/(\d+(?:\.\d+)?)/);
   if (!m) return 'normal';
   const v = parseFloat(m[1]);
+  if (v <= 0) return 'normal';
   if (v < 55 || v >= 400) return 'critical';
   if (v < 70 || v >= 200) return 'warning';
   return 'normal';
@@ -253,6 +257,7 @@ export function grbsSeverity(grbs: number | string): VitalSeverity {
 
 /** How many vitals are currently deranged — drives the patient stability meter. */
 export function instabilityScore(session: CaseSession): number {
+  if (session.isQuestionLed) return 0;
   const v = session.patient?.currentVitals;
   if (!v) return 0;
   const sevs = [

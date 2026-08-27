@@ -17,7 +17,24 @@ import * as ui from '../ui.js';
 import { el, clear, pct } from '../dom.js';
 
 const APP_NAME = 'PYQ';
-const TAGLINE = 'Previous-year questions, offline, on your terms.';
+const TAGLINE = 'Previous-year questions & clinical cases, offline on your terms.';
+
+const DAILY_QUOTES = [
+  { quote: 'The good physician treats the disease; the great physician treats the patient who has the disease.', author: 'Sir William Osler' },
+  { quote: 'Wherever the art of Medicine is loved, there is also a love of Humanity.', author: 'Hippocrates' },
+  { quote: 'Medicine is a science of uncertainty and an art of probability.', author: 'Sir William Osler' },
+  { quote: 'In the field of observation, chance favors only the prepared mind.', author: 'Louis Pasteur' },
+  { quote: 'Better is possible. It does not take genius. It takes diligence and moral clarity.', author: 'Dr. Atul Gawande' },
+  { quote: 'To study the phenomena of disease without books is to sail an uncharted sea; to study books without patients is not to go to sea at all.', author: 'Sir William Osler' },
+  { quote: 'Observation, Reason, Human Understanding, Courage; these make the physician.', author: 'Dr. Martin H. Fischer' },
+  { quote: 'The secret of the care of the patient is in caring for the patient.', author: 'Dr. Francis W. Peabody' },
+  { quote: 'Cure sometimes, treat often, comfort always.', author: 'Dr. Edward L. Trudeau' },
+  { quote: 'We are what we repeatedly do. Excellence, then, is not an act, but a habit.', author: 'Aristotle' },
+  { quote: 'Every question practiced today is a patient saved tomorrow.', author: 'Clinical Adage' },
+  { quote: 'Perseverance is not a long race; it is many short races one after the other.', author: 'Walter Elliot' },
+];
+
+let activeQuoteIndex = Math.floor((Date.now() / (1000 * 60 * 60 * 24)) % DAILY_QUOTES.length);
 
 export async function show(root) {
   clear(root);
@@ -35,14 +52,17 @@ export async function show(root) {
   root.appendChild(
     el('div', { class: 'screen' }, [
       masthead(),
+      quoteCard(),
       statsStrip({ results, attempts, mistakes }),
       el('div', { class: 'grid' }, [
         heroTile(unfinished),
-        navCard('📚', 'Practice', 'Subject-wise and topic-wise question banks.', 'practice'),
-        navCard('🎯', 'Tests', 'Full-length mock papers under exam conditions.', 'tests'),
-        navCard('🩺', 'Cases', 'Work a patient from presentation to diagnosis.', 'cases'),
-        navCard('🧠', 'Review', 'Every mistake and bookmark, with the full explanation.', 'review'),
-        navCard('📊', 'Stats', 'Accuracy by subject, test history, backups.', 'stats'),
+        navCard('🎯', 'PYQ Papers', 'Previous year entrance exams (NEET-PG, INI-CET, AIIMS).', () => ui.navigate('practice', { source: 'PYQ' })),
+        navCard('🧠', 'CEREB Topics', 'Topic-wise coaching question banks across 19 subjects.', () => ui.navigate('practice', { source: 'CEREB' })),
+        navCard('🏹', 'ARROW High-Yield', 'Rapid-fire revision and high-yield concept questions.', () => ui.navigate('practice', { source: 'ARROW' })),
+        navCard('📝', 'Grand Tests', '165 full-length mock papers with timer & review flags.', () => ui.navigate('tests')),
+        navCard('🩺', 'Cases Simulator', 'Manage emergency admissions from vitals to discharge.', () => ui.navigate('cases')),
+        navCard('🔍', 'Review & Mistakes', 'Every flagged item and mistake with full rationale.', () => ui.navigate('review')),
+        navCard('📊', 'Stats & Backups', 'Subject-wise accuracy breakdown, test history & data export.', () => ui.navigate('stats')),
       ]),
     ])
   );
@@ -57,7 +77,6 @@ async function safeGetAll(name) {
   try {
     return await store.getAll(name);
   } catch (err) {
-    // Private browsing / quota failures degrade to "no data yet" rather than a broken home screen.
     console.warn(`home: could not read store "${name}"`, err);
     return [];
   }
@@ -74,6 +93,35 @@ function masthead() {
   return el('div', { class: 'masthead' }, [el('h1', { text: APP_NAME }), el('p', { text: TAGLINE })]);
 }
 
+function quoteCard() {
+  const q = DAILY_QUOTES[activeQuoteIndex % DAILY_QUOTES.length];
+  const quoteText = el('p', { class: 'quote__text', text: `“${q.quote}”` });
+  const quoteAuthor = el('span', { class: 'quote__author', text: `— ${q.author}` });
+
+  const card = el('div', { class: 'quote-card' }, [
+    el('div', { class: 'quote-card__header' }, [
+      el('span', { class: 'quote-card__tag', text: '💡 QUOTE OF THE DAY' }),
+      el('button', {
+        class: 'quote-card__btn',
+        type: 'button',
+        'aria-label': 'Next Quote',
+        title: 'Shuffle Quote',
+        onclick: (e) => {
+          e.stopPropagation();
+          activeQuoteIndex = (activeQuoteIndex + 1) % DAILY_QUOTES.length;
+          const next = DAILY_QUOTES[activeQuoteIndex];
+          quoteText.textContent = `“${next.quote}”`;
+          quoteAuthor.textContent = `— ${next.author}`;
+        },
+      }, [el('span', { text: '↻' })]),
+    ]),
+    quoteText,
+    quoteAuthor,
+  ]);
+
+  return card;
+}
+
 function statsStrip({ results, attempts, mistakes }) {
   const gtAttempted = results.reduce((sum, r) => sum + (r.attempted || 0), 0);
   const gtCorrect = results.reduce((sum, r) => sum + (r.correct || 0), 0);
@@ -82,7 +130,6 @@ function statsStrip({ results, attempts, mistakes }) {
 
   const totalAnswered = gtAttempted + prAttempted;
   const totalCorrect = gtCorrect + prCorrect;
-  // An all-zero fresh install must read 0%, never NaN%.
   const accuracy = totalAnswered > 0 ? totalCorrect / totalAnswered : 0;
 
   return el('div', { class: 'stats' }, [
@@ -140,8 +187,9 @@ function heroTile(session) {
   );
 }
 
-function navCard(icon, title, sub, screen) {
-  return el('button', { class: 'card', type: 'button', onclick: () => ui.navigate(screen) }, [
+function navCard(icon, title, sub, onClickOrScreen) {
+  const handler = typeof onClickOrScreen === 'function' ? onClickOrScreen : () => ui.navigate(onClickOrScreen);
+  return el('button', { class: 'card', type: 'button', onclick: handler }, [
     el('span', { class: 'card__icon', text: icon }),
     el('div', { class: 'card__title', text: title }),
     el('div', { class: 'card__sub', text: sub }),

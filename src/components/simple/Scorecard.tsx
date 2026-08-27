@@ -74,7 +74,7 @@ export const Scorecard: React.FC<ScorecardProps> = ({ session, onNewCase, onBack
                   <div>
                     <div>{g.concept}</div>
                     <div className="text-[13px] tnum" style={{ color: 'var(--text-faint)' }}>
-                      {g.qid} · {g.examYear} · you chose {g.userChoice}, answer {g.correctChoice}
+                      {g.qid} · {g.examYear} · you chose {g.userChoice || 'none'}, answer {g.correctChoice}
                     </div>
                   </div>
                 </div>
@@ -112,7 +112,7 @@ export const Scorecard: React.FC<ScorecardProps> = ({ session, onNewCase, onBack
                     {c.concept}
                     <span className="text-[13px] tnum" style={{ color: 'var(--text-faint)' }}>
                       {' '}
-                      · {c.sourceQIDs.join(', ')}
+                      · {(c.sourceQIDs || []).join(', ')}
                     </span>
                   </li>
                 ))}

@@ -162,3 +162,69 @@ test('corpus markup only reaches the DOM through the sanitizer', async () => {
   }
   assert.deepEqual(problems, []);
 });
+
+test('the service worker bypasses the case simulator with or without trailing slash', async () => {
+  const sw = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
+  assert.ok(
+    sw.includes('/\\/simulator(?:\\/|$)/.test(url.pathname)'),
+    'sw.js must use regex to bypass /simulator with or without trailing slash'
+  );
+  const regex = /\/simulator(?:\/|$)/;
+  assert.equal(regex.test('/simulator'), true);
+  assert.equal(regex.test('/simulator/'), true);
+  assert.equal(regex.test('/simulator/index.html'), true);
+  assert.equal(regex.test('/simulator/assets/index.js'), true);
+  assert.equal(regex.test('/other'), false);
+});
+
+test('index.html supports prefers-color-scheme light/dark theme-color meta tags', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(
+    html.includes('<meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)">'),
+    'missing light theme-color meta tag'
+  );
+  assert.ok(
+    html.includes('<meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">'),
+    'missing dark theme-color meta tag'
+  );
+});
+
+test('ui.js uses pyq-theme as THEME_KEY aligning with index.html and simulator', async () => {
+  const uiSrc = await readFile(new URL('../src/ui.js', import.meta.url), 'utf8');
+  const indexHtml = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(uiSrc.includes("THEME_KEY = 'pyq-theme'"), "ui.js must use 'pyq-theme'");
+  assert.ok(indexHtml.includes("localStorage.getItem('pyq-theme')"), "index.html must check 'pyq-theme'");
+});
+
+test('TAB_SCREENS in app.js excludes review so review screen gets a back button', async () => {
+  const appSrc = await readFile(new URL('../src/app.js', import.meta.url), 'utf8');
+  const match = appSrc.match(/const TAB_SCREENS = new Set\(\[(.*?)\]\);/);
+  assert.ok(match, 'TAB_SCREENS definition found');
+  assert.ok(!match[1].includes("'review'"), 'TAB_SCREENS must not include review');
+});
+
+test('gt-screen.js only triggers 10 minutes remaining toast if durationMs > WARN_SOON_MS', async () => {
+  const gtScreenSrc = await readFile(new URL('../src/screens/gt-screen.js', import.meta.url), 'utf8');
+  assert.ok(
+    gtScreenSrc.includes('state.session.durationMs > WARN_SOON_MS && left <= WARN_SOON_MS && !marks.soon'),
+    'gt-screen.js must check session.durationMs > WARN_SOON_MS before toasting 10 min warning'
+  );
+});
+
+test('gt-screen.js restarts ticker if finishing/scoring fails', async () => {
+  const gtScreenSrc = await readFile(new URL('../src/screens/gt-screen.js', import.meta.url), 'utf8');
+  assert.ok(
+    gtScreenSrc.includes('if (state && !state.ticker) state.ticker = setInterval(tick, TICK_MS);'),
+    'gt-screen.js must restart state.ticker on submit failure'
+  );
+});
+
+test('dom.js triggers image fallback immediately if img is already complete with naturalWidth === 0', async () => {
+  const domSrc = await readFile(new URL('../src/dom.js', import.meta.url), 'utf8');
+  assert.ok(
+    domSrc.includes('if (img.complete && img.naturalWidth === 0)'),
+    'dom.js must check img.complete && img.naturalWidth === 0'
+  );
+});
+
+

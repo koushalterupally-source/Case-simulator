@@ -93,6 +93,7 @@ export interface OrderResultItem {
   isReady: boolean;
   resultText: string;
   turnaroundMinutes: number;
+  orderedTurnIndex?: number;
 }
 
 export interface SimTurn {
@@ -120,6 +121,14 @@ export interface PatientState {
   diagnosis: string;
   clinchingClue: string;
   clinchingClueTime: string;
+  history?: string;
+  physicalExam?: {
+    general?: string;
+    cvs?: string;
+    resp?: string;
+    abdomen?: string;
+    cns?: string;
+  };
 }
 
 export interface EndOfCaseScorecard {

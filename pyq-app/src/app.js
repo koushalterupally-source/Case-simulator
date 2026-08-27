@@ -19,7 +19,7 @@ import * as analysis from './screens/analysis.js';
 import * as review from './screens/review.js';
 import * as stats from './screens/stats.js';
 
-const TAB_SCREENS = new Set(['home', 'practice', 'tests', 'cases', 'review', 'stats']);
+const TAB_SCREENS = new Set(['home', 'practice', 'tests', 'cases', 'stats']);
 
 /**
  * The clinical case simulator is a separate bundle served from ./simulator/, not a screen in this
@@ -106,7 +106,7 @@ function paintChrome(screen) {
 
   const title = document.getElementById('appbar-title');
   if (title && TAB_SCREENS.has(screen)) {
-    title.textContent = { home: 'PYQ', practice: 'Practice', tests: 'Grand Tests', cases: 'Cases', review: 'Review', stats: 'Stats' }[screen] || 'PYQ';
+    title.textContent = { home: 'PYQ', practice: 'Practice', tests: 'Grand Tests', cases: 'Cases', stats: 'Stats' }[screen] || 'PYQ';
   }
 }
 

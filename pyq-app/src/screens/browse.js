@@ -39,9 +39,16 @@ async function safeLoadCatalog(root, onFail) {
 
 /* ------------------------------------------------------------------------- Practice: sources */
 
-export async function showPractice(root) {
+let selectedSourceFilter = 'ALL';
+let selectedSubjectQuery = '';
+
+export async function showPractice(root, params = {}) {
   clear(root);
   setTitle('Practice');
+
+  if (params && params.source) {
+    selectedSourceFilter = params.source.toUpperCase();
+  }
 
   const catalog = await safeLoadCatalog(root);
   if (!catalog) return;
@@ -52,31 +59,130 @@ export async function showPractice(root) {
     return;
   }
 
-  const bySource = new Map();
-  for (const entry of entries) {
-    const key = entry.source || 'Other';
-    if (!bySource.has(key)) bySource.set(key, []);
-    bySource.get(key).push(entry);
+  function renderView() {
+    clear(root);
+    setTitle('Practice');
+
+    const container = el('div', { class: 'screen' });
+
+    // 1. Source Navigation Tabs (All / PYQ / CEREB / ARROW)
+    const sourceTabs = el('div', { class: 'segmented-tabs' }, [
+      sourceTabBtn('ALL', 'All QBank', selectedSourceFilter === 'ALL'),
+      sourceTabBtn('PYQ', '🎯 PYQ Papers', selectedSourceFilter === 'PYQ'),
+      sourceTabBtn('CEREB', '🧠 CEREB Topics', selectedSourceFilter === 'CEREB'),
+      sourceTabBtn('ARROW', '🏹 ARROW High-Yield', selectedSourceFilter === 'ARROW'),
+    ]);
+    container.appendChild(sourceTabs);
+
+    // 2. ARROW High-Yield Banner (if ARROW selected)
+    if (selectedSourceFilter === 'ARROW') {
+      container.appendChild(arrowBanner(entries));
+    }
+
+    // 3. Subject Filter Chips
+    const uniqueSubjects = Array.from(new Set(entries.map((e) => e.subject).filter(Boolean))).sort();
+    const filterPills = el('div', { class: 'filter-pills' }, [
+      subjectChip('All Subjects', selectedSubjectQuery === '', () => {
+        selectedSubjectQuery = '';
+        renderView();
+      }),
+      ...uniqueSubjects.map((sub) =>
+        subjectChip(sub, selectedSubjectQuery === sub, () => {
+          selectedSubjectQuery = selectedSubjectQuery === sub ? '' : sub;
+          renderView();
+        })
+      ),
+    ]);
+    container.appendChild(filterPills);
+
+    // 4. Filter entries based on active filters
+    let filtered = entries;
+    if (selectedSourceFilter === 'PYQ') {
+      filtered = filtered.filter((e) => e.source === 'PYQ');
+    } else if (selectedSourceFilter === 'CEREB') {
+      filtered = filtered.filter((e) => e.source === 'CEREB');
+    } else if (selectedSourceFilter === 'ARROW') {
+      // For ARROW high yield, present both PYQ & Cereb prioritized by question density
+      filtered = [...filtered].sort((a, b) => (b.total || 0) - (a.total || 0));
+    }
+
+    if (selectedSubjectQuery) {
+      filtered = filtered.filter((e) => e.subject === selectedSubjectQuery);
+    }
+
+    if (filtered.length === 0) {
+      container.appendChild(emptyState('🔍', 'No question banks match the selected filters.'));
+      root.appendChild(container);
+      return;
+    }
+
+    const bySource = new Map();
+    for (const entry of filtered) {
+      const key = selectedSourceFilter === 'ARROW' ? 'ARROW' : (entry.source || 'Other');
+      if (!bySource.has(key)) bySource.set(key, []);
+      bySource.get(key).push(entry);
+    }
+
+    for (const [source, subjects] of bySource) {
+      container.appendChild(el('div', { class: 'section-title', text: sourceLabel(source) }));
+      container.appendChild(
+        el(
+          'div',
+          { class: 'list' },
+          subjects.map((s) => subjectRow(s))
+        )
+      );
+    }
+
+    root.appendChild(container);
   }
 
-  const sections = [];
-  for (const [source, subjects] of bySource) {
-    sections.push(el('div', { class: 'section-title', text: sourceLabel(source) }));
-    sections.push(
-      el(
-        'div',
-        { class: 'list' },
-        subjects.map((s) => subjectRow(s))
-      )
+  function sourceTabBtn(key, label, isActive) {
+    return el(
+      'button',
+      {
+        class: `segmented-tab ${isActive ? 'segmented-tab--active' : ''}`,
+        type: 'button',
+        onclick: () => {
+          selectedSourceFilter = key;
+          renderView();
+        },
+      },
+      [el('span', { text: label })]
     );
   }
 
-  root.appendChild(el('div', { class: 'screen' }, sections));
+  function subjectChip(label, isActive, onClick) {
+    return el(
+      'button',
+      {
+        class: `filter-pill ${isActive ? 'filter-pill--active' : ''}`,
+        type: 'button',
+        onclick: onClick,
+      },
+      [el('span', { text: label })]
+    );
+  }
+
+  function arrowBanner(allEntries) {
+    const totalQ = allEntries.reduce((sum, e) => sum + (e.total || 0), 0);
+    return el('div', { class: 'arrow-banner' }, [
+      el('div', { class: 'arrow-banner__badge', text: '⚡ RAPID REVISION MODE' }),
+      el('div', { class: 'arrow-banner__title', text: 'ARROW High-Yield Question Sets' }),
+      el('div', {
+        class: 'arrow-banner__desc',
+        text: `Targeted clinical recall across ${allEntries.length} subject modules (${totalQ.toLocaleString()} questions). Select a high-yield subject below to begin rapid practice.`,
+      }),
+    ]);
+  }
+
+  renderView();
 }
 
 function sourceLabel(source) {
-  if (source === 'PYQ') return 'PYQ — previous-year exam papers';
-  if (source === 'CEREB') return 'CEREB — topic-wise question banks';
+  if (source === 'PYQ') return 'PYQ — Previous-Year Exam Papers';
+  if (source === 'CEREB') return 'CEREB — Topic-Wise Question Banks';
+  if (source === 'ARROW') return 'ARROW — Rapid High-Yield Practice Banks';
   return source;
 }
 
@@ -88,7 +194,7 @@ function subjectRow(entry) {
     [
       el('div', { class: 'row__main' }, [
         el('div', { class: 'row__title', text: entry.subject || 'Unclassified' }),
-        el('div', { class: 'row__meta', text: `${(entry.groups || []).length} ${plural}` }),
+        el('div', { class: 'row__meta', text: `${(entry.groups || []).length} ${plural} · ${entry.source || 'QBank'}` }),
       ]),
       el('span', { class: 'row__count', text: String(entry.total) }),
     ]

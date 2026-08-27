@@ -58,7 +58,7 @@ function watchImage(img) {
   // Inline data: images always render, offline included — nothing to guard against.
   if ((img.getAttribute('src') || '').startsWith('data:')) return;
 
-  img.addEventListener('error', () => {
+  const triggerFallback = () => {
     const src = img.getAttribute('src');
     const alt = img.getAttribute('alt') || '';
 
@@ -76,7 +76,13 @@ function watchImage(img) {
     });
 
     img.replaceWith(placeholder);
-  });
+  };
+
+  img.addEventListener('error', triggerFallback);
+
+  if (img.complete && img.naturalWidth === 0) {
+    triggerFallback();
+  }
 }
 
 export function clear(node) {

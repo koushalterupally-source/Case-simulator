@@ -476,27 +476,27 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
               <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-1">
                 <span className="font-bold text-amber-300 font-mono block">General Examination</span>
-                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.physicalExam.general}</p>
+                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.physicalExam?.general || 'Alert, oriented, stable.'}</p>
               </div>
               <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-1">
                 <span className="font-bold text-amber-300 font-mono block">Cardiovascular System (CVS)</span>
-                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.physicalExam.cvs}</p>
+                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.physicalExam?.cvs || 'S1 S2 heard, normal.'}</p>
               </div>
               <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-1">
                 <span className="font-bold text-amber-300 font-mono block">Respiratory System</span>
-                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.physicalExam.resp}</p>
+                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.physicalExam?.resp || 'Clear breath sounds bilaterally.'}</p>
               </div>
               <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-1">
                 <span className="font-bold text-amber-300 font-mono block">Abdominal Examination</span>
-                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.physicalExam.abdomen}</p>
+                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.physicalExam?.abdomen || 'Soft, non-tender.'}</p>
               </div>
               <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-1">
                 <span className="font-bold text-amber-300 font-mono block">Central Nervous System (CNS)</span>
-                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.physicalExam.cns}</p>
+                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.physicalExam?.cns || 'Alert and oriented.'}</p>
               </div>
               <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-1">
                 <span className="font-bold text-amber-300 font-mono block">Relevant Medical History</span>
-                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.history}</p>
+                <p className="text-slate-300 font-sans leading-relaxed">{session.patient.history || 'No significant past medical history.'}</p>
               </div>
             </div>
           </div>
@@ -557,7 +557,9 @@ export const LiveSimulation: React.FC<LiveSimulationProps> = ({
                   <div key={idx} className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-xs flex justify-between items-center font-mono">
                     <div>
                       <span className="text-slate-200 font-bold block">{ord.orderName}</span>
-                      <span className="text-slate-500 text-[10px]">Ordered turn {ord.orderedTurnIndex + 1}</span>
+                      <span className="text-slate-500 text-[10px]">
+                        {ord.orderedTurnIndex !== undefined ? `Ordered turn ${ord.orderedTurnIndex + 1}` : `Placed @ ${ord.placedSimTime}`}
+                      </span>
                     </div>
                     <span className="text-cyan-300 text-xs font-bold bg-cyan-950 border border-cyan-500/30 px-2.5 py-1 rounded-lg">
                       Ready @ {ord.readySimTime}

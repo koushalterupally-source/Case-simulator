@@ -3,7 +3,7 @@
 // `gt.js`, and `analysis.js` own the business logic and call into this module to navigate,
 // notify, and show chrome.
 
-const THEME_KEY = 'pyq.ui.theme';
+const THEME_KEY = 'pyq-theme';
 
 function safeLocalStorage() {
   try {

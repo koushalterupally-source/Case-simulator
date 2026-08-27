@@ -83,7 +83,7 @@ self.addEventListener('fetch', (event) => {
   // ./simulator/. This worker's scope is broader, so without this it would answer the very first
   // navigation there — before the simulator's own worker registers — and hand back THIS app's
   // shell as the offline fallback, loading the wrong app.
-  if (url.pathname.includes('/simulator/')) return;
+  if (/\/simulator(?:\/|$)/.test(url.pathname)) return;
 
   // Question shards: cache-first, and keep what we fetch so a revisited topic works offline.
   if (url.pathname.includes('/data/shards/')) {
