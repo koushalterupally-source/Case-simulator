@@ -79,8 +79,25 @@ export async function showPractice(root, params = {}) {
       container.appendChild(arrowBanner(entries));
     }
 
-    // 3. Subject Filter Chips
-    const uniqueSubjects = Array.from(new Set(entries.map((e) => e.subject).filter(Boolean))).sort();
+    // 3. Filter entries based on active source tab
+    let sourceFiltered = entries;
+    if (selectedSourceFilter === 'PYQ') {
+      sourceFiltered = sourceFiltered.filter((e) => e.source === 'PYQ');
+    } else if (selectedSourceFilter === 'CEREB') {
+      sourceFiltered = sourceFiltered.filter((e) => e.source === 'CEREB');
+    } else if (selectedSourceFilter === 'ARROW') {
+      // For ARROW high yield, present both PYQ & Cereb prioritized by question density
+      sourceFiltered = [...sourceFiltered].sort((a, b) => (b.total || 0) - (a.total || 0));
+    }
+
+    // 4. Subject Filter Chips
+    const uniqueSubjects = Array.from(new Set(sourceFiltered.map((e) => e.subject).filter(Boolean))).sort();
+    
+    // reset selected subject if not present in the new tab
+    if (selectedSubjectQuery && !uniqueSubjects.includes(selectedSubjectQuery)) {
+      selectedSubjectQuery = '';
+    }
+
     const filterPills = el('div', { class: 'filter-pills' }, [
       subjectChip('All Subjects', selectedSubjectQuery === '', () => {
         selectedSubjectQuery = '';
@@ -95,17 +112,8 @@ export async function showPractice(root, params = {}) {
     ]);
     container.appendChild(filterPills);
 
-    // 4. Filter entries based on active filters
-    let filtered = entries;
-    if (selectedSourceFilter === 'PYQ') {
-      filtered = filtered.filter((e) => e.source === 'PYQ');
-    } else if (selectedSourceFilter === 'CEREB') {
-      filtered = filtered.filter((e) => e.source === 'CEREB');
-    } else if (selectedSourceFilter === 'ARROW') {
-      // For ARROW high yield, present both PYQ & Cereb prioritized by question density
-      filtered = [...filtered].sort((a, b) => (b.total || 0) - (a.total || 0));
-    }
-
+    // Apply subject filter
+    let filtered = sourceFiltered;
     if (selectedSubjectQuery) {
       filtered = filtered.filter((e) => e.subject === selectedSubjectQuery);
     }
