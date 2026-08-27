@@ -20,19 +20,8 @@ import * as review from './screens/review.js';
 import * as stats from './screens/stats.js';
 import * as anki from './screens/anki.js';
 
-const TAB_SCREENS = new Set(['home', 'practice', 'tests', 'cases', 'stats']);
+const TAB_SCREENS = new Set(['home', 'practice', 'tests', 'anki', 'stats']);
 
-/**
- * The clinical case simulator is a separate bundle served from ./simulator/, not a screen in this
- * app. It keeps its own React runtime and its own question index; sharing the palette, the theme
- * key and the navigation is what makes the two read as one product. A real navigation is correct
- * here — there is nothing to preserve in this app's memory while a case is being worked.
- */
-const SIMULATOR_PATH = 'simulator/';
-
-function openSimulator() {
-  location.assign(SIMULATOR_PATH);
-}
 
 let root = null;
 let catalog = null;
@@ -197,10 +186,6 @@ async function routeTo(screen, params) {
     case 'analysis':
       gtRunning = false;
       return analysis.show(root, params);
-
-    case 'cases':
-      openSimulator();
-      return;
 
     case 'review':
       return review.show(root);
