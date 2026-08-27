@@ -156,7 +156,7 @@ async function routeTo(screen, params) {
       return home.show(root);
 
     case 'practice':
-      return browse.showPractice(root);
+      return browse.showPractice(root, params);
 
     case 'subject':
       return browse.showSubject(root, params);
