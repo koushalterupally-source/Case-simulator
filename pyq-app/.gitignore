@@ -1,0 +1,13 @@
+# Generated question data. Rebuilt from the Medqbank source assets by build/build_index.py.
+# Roughly 90 MB across thousands of shards — derived, never authored, so it does not belong in git.
+data/
+
+# Android build output. medquiz-app committed this once; not repeating it.
+android/app/build/
+*.apk
+
+# The repo root ignores build/ globally, which would silently swallow this app's
+# pipeline. These scripts are source, not output. Anchored with a leading slash so it
+# re-includes only pyq-app/build, and not android/app/build above.
+!/build/
+!/build/*.py
