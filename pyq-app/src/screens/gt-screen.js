@@ -10,6 +10,7 @@ import * as GT from '../gt.js';
 import * as data from '../data.js';
 import * as store from '../store.js';
 import * as ui from '../ui.js';
+import * as analysis from './analysis.js';
 import { el, html, clear, optionKey, duration } from '../dom.js';
 
 const TICK_MS = 250;
@@ -177,8 +178,10 @@ function render() {
   );
 
   renderActions();
-  paintClock();
+  // paintAppbar creates the clock element, so it has to run before the first paintClock —
+  // otherwise the clock sits blank until the next tick.
   paintAppbar();
+  paintClock();
 }
 
 function paintAppbar() {
@@ -350,13 +353,19 @@ async function finish(auto) {
     const answers = await data.loadAnswers(session.shards);
     const result = GT.submit(session, questions, answers);
 
+    // Hand the analysis screen an in-memory copy before attempting to persist, so a storage
+    // failure costs the candidate their history but never the paper they just sat.
+    analysis.stash(result);
+
     await persist(session);
     try {
       await store.put('results', result);
       await store.bulkPut(
         'mistakes',
         result.questions
-          .filter((r) => !r.isCorrect)
+          // Only genuinely wrong answers. A skipped question is a gap, not a mistake, and folding
+          // 195 unattempted questions into the mistake bank buries the three you actually got wrong.
+          .filter((r) => r.chosen !== null && !r.isCorrect)
           .map((r) => ({
             questionId: r.id,
             subject: r.subject || null,

@@ -252,7 +252,9 @@ export function bySubject(result) {
         avgTimeMs: b.total > 0 ? b.timeMs / b.total : 0,
       };
     })
-    .sort((a, b) => b.total - a.total);
+    // Subjects the candidate actually attempted come first — a paper left half-finished otherwise
+    // opens on a wall of 0/0 rows that say nothing about performance.
+    .sort((a, b) => b.attempted - a.attempted || b.total - a.total);
 
   const ranked = subjects.filter((s) => s.attempted >= 3).sort((a, b) => a.accuracy - b.accuracy);
 

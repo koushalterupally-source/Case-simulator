@@ -74,9 +74,11 @@ function paintChrome(screen) {
   const backBtn = document.getElementById('back-btn');
   if (backBtn) backBtn.hidden = TAB_SCREENS.has(screen);
 
+  // A sitting or a practice run needs the full viewport, a stray tab tap mid-exam is a trap, and
+  // both runners put their own action bar where the tab bar sits.
+  const RUNNERS = new Set(['gt', 'group', 'practice-resume']);
   const tabbar = document.getElementById('tabbar');
-  // A sitting or a question needs the full viewport, and a stray tab tap mid-exam is a trap.
-  if (tabbar) tabbar.hidden = screen === 'gt' || screen === 'practice-run';
+  if (tabbar) tabbar.hidden = RUNNERS.has(screen);
 
   for (const btn of document.querySelectorAll('.tabbar__item')) {
     if (btn.dataset.screen === screen) btn.setAttribute('aria-current', 'page');
@@ -104,6 +106,17 @@ async function handleNavigate(screen, params, meta) {
   }
 
   const seq = ++navSeq;
+
+  // Tear down the screen being left, so no timer or listener outlives it.
+  if (currentScreen && currentScreen !== screen) {
+    if (currentScreen === 'group' || currentScreen === 'practice-resume') practiceScreen.stop();
+    if (currentScreen === 'gt' && screen !== 'gt') gtScreen.stop();
+  }
+
+  // Action bars and sheets live on <body>, not inside the screen container, so clearing the
+  // container does not remove them. A leftover bar would sit over the next screen's content.
+  for (const stale of document.querySelectorAll('.actions, .sheet-backdrop')) stale.remove();
+
   currentScreen = screen;
   paintChrome(screen);
 

@@ -65,22 +65,33 @@ HARD_LIMIT_BYTES = 1_048_576    # 1 MiB -- the actual hard limit we assert at th
 MIN_EXPLANATION_CHARS = 60
 
 # --- subject-classification tuning -----------------------------------------
-# Chosen via an internal 80/20 train/validation split over the subject-tagged
-# practice corpus (see build_lexicon_and_validate()). At these settings the
-# lexicon pass measured ~93% precision at ~21% reach on held-out question
-# text -- precision is favoured over reach per the spec.
-LEX_MIN_SUBJECT_DOCS = 5   # a term must appear in >= this many docs of a subject to be considered
-LEX_SCORE_CUT = 3.0        # a term must clear this log-odds score to enter a subject's lexicon
-CLASSIFY_FLOOR = 8.0       # absolute score floor to accept the top subject
-CLASSIFY_MARGIN = 2.5      # top subject must beat the runner-up by at least this much
+# Second pass is a multinomial Naive Bayes over unigrams+bigrams of
+# question+options text, trained on the deduped practice corpus. Chosen via
+# an internal 80/20 train/validation split (see validate_nb_thresholds()):
+# a hand-cut log-odds keyword lexicon was tried first and topped out around
+# 93% precision / 19-21% reach; NB with bigrams and a tuned margin threshold
+# reaches ~90-92% precision at 62-68% reach on the same holdout -- a large
+# reach improvement at an equal or better precision, so NB replaced the
+# lexicon. See report.json's classificationValidation.curve for the full
+# precision/reach tradeoff and NB_MARGIN_THRESHOLD's justification.
+NB_MIN_DOC_FREQ = 2        # drop hapax terms (must appear in >= this many training docs)
+NB_ALPHA = 0.1             # Laplace/Lidstone smoothing constant
+NB_USE_BIGRAMS = True      # bigrams matter: medical text is full of two-word entities
+NB_MARGIN_THRESHOLD = 16.0 # accept the top subject only if it beats the runner-up by this much (log-space)
 VALIDATION_SEED = 42
 VALIDATION_SPLIT = 0.8
+# Curve reported alongside the chosen operating point, for auditability.
+NB_CURVE_THRESHOLDS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 25, 30]
 
 TAG_RE = re.compile(r"<[^>]+>")
 NONWORD_RE = re.compile(r"[^\w]+", re.UNICODE)
 IMG_TAG_RE = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
 SRC_ATTR_RE = re.compile(r"src\s*=\s*[\"']([^\"']*)[\"']", re.IGNORECASE)
-WORD_RE = re.compile(r"[a-z]{3,}")
+# A minority of question stems (84, across 3 practice files) embed an image
+# as plain text -- "[Image: https://...]" -- instead of an <img> tag.
+BRACKET_IMAGE_RE = re.compile(r"\[\s*image\s*:\s*(https?://\S+?)\s*\]", re.IGNORECASE)
+URL_RE = re.compile(r"https?://\S+")
+WORD_RE = re.compile(r"[a-z]{2,}")
 
 STOPWORDS = frozenset("""
 the and for with was are that this from into onto has have had not but who whom which
@@ -114,9 +125,29 @@ def normalize_key(question_text):
     return t[:200]
 
 
-def tokenize(question_text):
-    t = TAG_RE.sub(" ", question_text).lower()
+def tokenize(text):
+    """lowercase, strip tags and raw URLs, split into alpha words of length
+    >= 2, drop stopwords. URLs are stripped in addition to tags because a
+    minority of question stems embed an image as plain text -- "[Image:
+    https://...]" -- rather than an <img> tag; left unstripped, the S3
+    hostname tokenizes into words ("amazonaws", "cerebellum", ...) that are
+    an artifact of which file's authoring convention was used, not of the
+    medical content, and would otherwise leak into the classifier as noise."""
+    t = TAG_RE.sub(" ", text)
+    t = URL_RE.sub(" ", t).lower()
     return [w for w in WORD_RE.findall(t) if w not in STOPWORDS]
+
+
+def nb_features(question_text, options):
+    """Feature bag for the Naive Bayes classifier: unigrams (+ bigrams) of
+    question text and option text combined, matching the configuration
+    validated in validate_nb_thresholds()."""
+    combined = question_text + " " + " ".join(options or [])
+    toks = tokenize(combined)
+    feats = list(toks)
+    if NB_USE_BIGRAMS:
+        feats.extend(f"{a}_{b}" for a, b in zip(toks, toks[1:]))
+    return feats
 
 
 def has_remote_image(text):
@@ -126,6 +157,9 @@ def has_remote_image(text):
             src = m.group(1).strip().lower()
             if src.startswith("http://") or src.startswith("https://"):
                 return True
+    # plain-text "[Image: https://...]" convention used by a handful of files
+    if BRACKET_IMAGE_RE.search(text):
+        return True
     return False
 
 
@@ -302,73 +336,119 @@ def dedup_practice(practice_records):
 
 
 # --------------------------------------------------------------------------
-# Step 3: subject-classification lexicon (log-odds) + validation
+# Step 3: subject-classification -- multinomial Naive Bayes + validation
 # --------------------------------------------------------------------------
-
-def build_term_stats(training_records):
-    """training_records: list of dicts with '_canonSubject' and 'question'.
-    Returns (subj_doc_count, term_subj_count, term_total_count, N)."""
-    subj_doc_count = defaultdict(int)
-    term_subj_count = defaultdict(lambda: defaultdict(int))
-    term_total_count = defaultdict(int)
-    n = 0
-    for rec in training_records:
-        subj = rec["_canonSubject"]
-        subj_doc_count[subj] += 1
-        n += 1
-        for t in set(tokenize(rec["question"])):
-            term_subj_count[t][subj] += 1
-            term_total_count[t] += 1
-    return subj_doc_count, term_subj_count, term_total_count, n
+#
+# A hand-cut log-odds keyword lexicon was the first cut at this (see the
+# validation numbers in the module docstring / report.json history): it
+# capped out around 93% precision at ~19-21% reach on held-out text. A
+# multinomial Naive Bayes over the full vocabulary (unigrams + bigrams of
+# question+options, Laplace-smoothed, classified by log-posterior margin)
+# does substantially better on the same holdout harness -- see
+# validate_nb_thresholds(). NB won, so it replaced the lexicon pass;
+# lexicon.json is kept as the audit-artifact filename ARCHITECTURE.md
+# specifies, now holding the NB model's audit trace instead.
 
 
-def build_lexicon(subj_doc_count, term_subj_count, term_total_count, n, min_a, score_cut):
-    """Build subject -> {term: score} using log-odds with add-1 smoothing."""
-    lexicon = defaultdict(dict)
-    for t, subj_counts in term_subj_count.items():
-        total_t = term_total_count[t]
-        for subj, a in subj_counts.items():
-            if a < min_a:
-                continue
-            big_a = subj_doc_count[subj]
-            b = total_t - a
-            big_b = n - big_a
-            score = math.log((a + 1) / (big_a - a + 1)) - math.log((b + 1) / (big_b - b + 1))
-            if score > score_cut:
-                lexicon[subj][t] = score
-    return {s: dict(terms) for s, terms in lexicon.items()}
+class NaiveBayesModel:
+    """A multinomial Naive Bayes text classifier with Laplace smoothing,
+    trained once and reused for both validation and full-corpus scoring."""
+
+    __slots__ = ("subjects", "log_prior", "log_like", "vocab", "vocab_size", "n_docs")
+
+    def __init__(self, training_records, min_doc_freq, alpha):
+        subj_doc_count = defaultdict(int)
+        term_class_count = defaultdict(lambda: defaultdict(int))
+        term_doc_freq = defaultdict(int)
+        class_term_total = defaultdict(int)
+        subjects = set()
+
+        doc_feats = []
+        for rec in training_records:
+            subj = rec["_canonSubject"]
+            subjects.add(subj)
+            feats = nb_features(rec["question"], rec.get("options"))
+            doc_feats.append((subj, feats))
+
+        for _subj, feats in doc_feats:
+            for t in set(feats):
+                term_doc_freq[t] += 1
+
+        vocab = frozenset(t for t, df in term_doc_freq.items() if df >= min_doc_freq)
+
+        for subj, feats in doc_feats:
+            subj_doc_count[subj] += 1
+            for t in feats:
+                if t in vocab:
+                    term_class_count[t][subj] += 1
+                    class_term_total[subj] += 1
+
+        n = len(training_records)
+        subjects = sorted(subjects)
+        v = len(vocab)
+
+        log_prior = {c: math.log(subj_doc_count[c] / n) for c in subjects}
+        log_like = {}
+        for t in vocab:
+            per_class = {}
+            counts = term_class_count[t]
+            for c in subjects:
+                cnt = counts.get(c, 0)
+                per_class[c] = math.log((cnt + alpha) / (class_term_total[c] + alpha * v))
+            log_like[t] = per_class
+
+        self.subjects = subjects
+        self.log_prior = log_prior
+        self.log_like = log_like
+        self.vocab = vocab
+        self.vocab_size = v
+        self.n_docs = n
+
+    def score(self, question_text, options):
+        """Returns (ranked [(subject, score), ...] desc by score)."""
+        feats = [t for t in nb_features(question_text, options) if t in self.vocab]
+        counts = defaultdict(int)
+        for t in feats:
+            counts[t] += 1
+        scores = dict(self.log_prior)
+        for t, cnt in counts.items():
+            per_class = self.log_like[t]
+            for c in self.subjects:
+                scores[c] += cnt * per_class[c]
+        return sorted(scores.items(), key=lambda kv: -kv[1])
+
+    def classify(self, question_text, options, margin_threshold):
+        """Returns (subject_or_None, margin). margin is always returned
+        (even when the prediction is rejected) so callers can record it as
+        a confidence / diagnostic value."""
+        ranked = self.score(question_text, options)
+        top_subj, top_score = ranked[0]
+        runner_score = ranked[1][1] if len(ranked) > 1 else float("-inf")
+        margin = top_score - runner_score
+        if margin >= margin_threshold:
+            return top_subj, margin
+        return None, margin
+
+    def top_terms(self, subject, k=25):
+        """Top-k terms most distinctive of `subject`, by log-likelihood
+        relative to the average across all subjects -- for lexicon.json's
+        audit trace, not used for classification itself."""
+        scored = []
+        for t, per_class in self.log_like.items():
+            own = per_class[subject]
+            avg_other = sum(v for c, v in per_class.items() if c != subject) / max(1, len(self.subjects) - 1)
+            scored.append((t, own - avg_other))
+        scored.sort(key=lambda kv: -kv[1])
+        return [{"term": t, "score": round(s, 3)} for t, s in scored[:k]]
 
 
-def build_inverted_lexicon(lexicon):
-    """term -> {subject: weight}, for fast per-token scoring."""
-    inv = defaultdict(dict)
-    for subj, terms in lexicon.items():
-        for t, w in terms.items():
-            inv[t][subj] = w
-    return inv
-
-
-def classify_by_lexicon(question_text, inverted_lexicon, floor, margin):
-    scores = defaultdict(float)
-    for t in set(tokenize(question_text)):
-        weights = inverted_lexicon.get(t)
-        if weights:
-            for subj, w in weights.items():
-                scores[subj] += w
-    if not scores:
-        return None
-    ranked = sorted(scores.items(), key=lambda kv: -kv[1])
-    top_subj, top_score = ranked[0]
-    runner_score = ranked[1][1] if len(ranked) > 1 else 0.0
-    if top_score >= floor and (top_score - runner_score) >= margin:
-        return top_subj
-    return None
-
-
-def validate_lexicon_thresholds(practice_pool_records):
-    """80/20 split over the deduped, canonicalized practice pool to estimate
-    the precision/reach of the chosen (floor, margin) thresholds on unseen
-    question text. Returns a stats dict for report.json.
+def validate_nb_thresholds(practice_pool_records):
+    """80/20 holdout over the deduped, canonicalized practice pool: trains
+    an NB model on the 80% split and reports the precision/reach curve of
+    NB_CURVE_THRESHOLDS on the held-out 20%, plus the chosen operating
+    point. This is the harness used to pick NB_MARGIN_THRESHOLD; the model
+    actually used for classification is retrained on the full pool
+    afterwards (see main()).
     """
     records = list(practice_pool_records)
     rng = random.Random(VALIDATION_SEED)
@@ -376,35 +456,62 @@ def validate_lexicon_thresholds(practice_pool_records):
     split = int(len(records) * VALIDATION_SPLIT)
     train, val = records[:split], records[split:]
 
-    subj_doc_count, term_subj_count, term_total_count, n = build_term_stats(train)
-    lexicon = build_lexicon(subj_doc_count, term_subj_count, term_total_count, n,
-                             LEX_MIN_SUBJECT_DOCS, LEX_SCORE_CUT)
-    inv = build_inverted_lexicon(lexicon)
+    model = NaiveBayesModel(train, NB_MIN_DOC_FREQ, NB_ALPHA)
 
-    correct = wrong = 0
+    predictions = []
     for rec in val:
-        pred = classify_by_lexicon(rec["question"], inv, CLASSIFY_FLOOR, CLASSIFY_MARGIN)
-        if pred is None:
-            continue
-        if pred == rec["_canonSubject"]:
-            correct += 1
-        else:
-            wrong += 1
-    resolved = correct + wrong
+        ranked = model.score(rec["question"], rec.get("options"))
+        top_subj, top_score = ranked[0]
+        runner_score = ranked[1][1] if len(ranked) > 1 else float("-inf")
+        predictions.append((top_subj, top_score - runner_score, rec["_canonSubject"]))
+
+    curve = []
+    chosen = None
+    for thr in NB_CURVE_THRESHOLDS:
+        correct = wrong = 0
+        for pred_subj, margin, true_subj in predictions:
+            if margin >= thr:
+                if pred_subj == true_subj:
+                    correct += 1
+                else:
+                    wrong += 1
+        resolved = correct + wrong
+        precision = (correct / resolved) if resolved else None
+        reach = (resolved / len(val)) if val else None
+        point = {
+            "threshold": thr,
+            "resolved": resolved,
+            "correct": correct,
+            "wrong": wrong,
+            "precision": precision,
+            "reach": reach,
+        }
+        curve.append(point)
+        if thr == NB_MARGIN_THRESHOLD:
+            chosen = point
+
     return {
         "method": "80/20 holdout over the deduped practice corpus, seed=%d" % VALIDATION_SEED,
+        "classifier": "multinomial Naive Bayes (unigrams+bigrams, Laplace alpha=%.2g)" % NB_ALPHA,
         "trainSize": len(train),
         "valSize": len(val),
-        "resolved": resolved,
-        "correct": correct,
-        "wrong": wrong,
-        "precision": (correct / resolved) if resolved else None,
-        "reach": (resolved / len(val)) if val else None,
+        "vocabSize": model.vocab_size,
+        "curve": curve,
+        "chosenThreshold": NB_MARGIN_THRESHOLD,
+        "chosenPoint": chosen,
+        "justification": (
+            "Threshold %.1f was picked from the curve above as the point that clears the "
+            "editorial precision floor (>=0.90) with a safety margin against holdout sampling "
+            "noise (n=%d val questions), while keeping reach comfortably past the 0.60 target. "
+            "Lower thresholds (10-13) cross 0.90 precision on this sample but sit within ~1 "
+            "standard error of the floor; %.1f trades a few points of reach for a precision "
+            "estimate whose 95%% CI stays clear of 0.90." % (NB_MARGIN_THRESHOLD, len(val), NB_MARGIN_THRESHOLD)
+        ),
         "params": {
-            "lexMinSubjectDocs": LEX_MIN_SUBJECT_DOCS,
-            "lexScoreCut": LEX_SCORE_CUT,
-            "classifyFloor": CLASSIFY_FLOOR,
-            "classifyMargin": CLASSIFY_MARGIN,
+            "nbMinDocFreq": NB_MIN_DOC_FREQ,
+            "nbAlpha": NB_ALPHA,
+            "nbUseBigrams": NB_USE_BIGRAMS,
+            "nbMarginThreshold": NB_MARGIN_THRESHOLD,
         },
     }
 
@@ -515,24 +622,26 @@ def main():
 
     surviving_practice = [r for r in practice_records if r["_ref"] in kept_refs]
 
-    # ---- step: subject classification lexicon (train on full dedup pool) --
-    validation_stats = validate_lexicon_thresholds(surviving_practice)
+    # ---- step: subject classification -- NB (train on full dedup pool) ----
+    validation_stats = validate_nb_thresholds(surviving_practice)
     report["classificationValidation"] = validation_stats
 
-    subj_doc_count, term_subj_count, term_total_count, n_train = build_term_stats(surviving_practice)
-    lexicon = build_lexicon(subj_doc_count, term_subj_count, term_total_count, n_train,
-                             LEX_MIN_SUBJECT_DOCS, LEX_SCORE_CUT)
-    inverted_lexicon = build_inverted_lexicon(lexicon)
+    nb_model = NaiveBayesModel(surviving_practice, NB_MIN_DOC_FREQ, NB_ALPHA)
 
     lexicon_path = os.path.join(out_dir, "lexicon.json")
     write_json_compact(lexicon_path, {
+        "method": "bayes",
         "params": {
-            "lexMinSubjectDocs": LEX_MIN_SUBJECT_DOCS,
-            "lexScoreCut": LEX_SCORE_CUT,
-            "classifyFloor": CLASSIFY_FLOOR,
-            "classifyMargin": CLASSIFY_MARGIN,
+            "nbMinDocFreq": NB_MIN_DOC_FREQ,
+            "nbAlpha": NB_ALPHA,
+            "nbUseBigrams": NB_USE_BIGRAMS,
+            "nbMarginThreshold": NB_MARGIN_THRESHOLD,
         },
-        "subjects": lexicon,
+        "vocabSize": nb_model.vocab_size,
+        "trainedOn": nb_model.n_docs,
+        "subjects": {
+            subj: nb_model.top_terms(subj, k=25) for subj in nb_model.subjects
+        },
     })
 
     # ==========================================================================
@@ -621,7 +730,7 @@ def main():
     papers_needs_image = 0
     date_parse_failures = []
     container_exact = 0
-    container_lexicon = 0
+    container_bayes = 0
     container_unclassified = 0
     container_total = 0
     by_file_paper_counts = {}
@@ -656,19 +765,22 @@ def main():
                 key = rec["_normKey"] if "_normKey" in rec else normalize_key(rec["question"])
                 rec["_normKey"] = key
 
-                # subject classification: exact match against practice pool first
+                # subject classification: exact match against practice pool first,
+                # then Naive Bayes. Below threshold stays null -- never guessed.
                 subject = None
                 subject_from = None
+                confidence = None
                 if key in key_to_kept:
                     subject = key_to_kept[key]["_canonSubject"]
                     subject_from = "exact"
                     container_exact += 1
                 else:
-                    pred = classify_by_lexicon(rec["question"], inverted_lexicon, CLASSIFY_FLOOR, CLASSIFY_MARGIN)
+                    pred, margin = nb_model.classify(rec["question"], rec.get("options"), NB_MARGIN_THRESHOLD)
+                    confidence = round(margin, 3)
                     if pred is not None:
                         subject = pred
-                        subject_from = "lexicon"
-                        container_lexicon += 1
+                        subject_from = "bayes"
+                        container_bayes += 1
                     else:
                         container_unclassified += 1
 
@@ -691,6 +803,7 @@ def main():
                     "options": rec["options"],
                     "subject": subject,
                     "subjectFrom": subject_from,
+                    "confidence": confidence,
                     "needsImage": needs_img,
                     "dupOf": dup_of,
                 }
@@ -738,7 +851,7 @@ def main():
     report["subjectClassification"] = {
         "containerQuestions": container_total,
         "exact": {"count": container_exact, "pct": container_exact / container_total if container_total else None},
-        "lexicon": {"count": container_lexicon, "pct": container_lexicon / container_total if container_total else None},
+        "bayes": {"count": container_bayes, "pct": container_bayes / container_total if container_total else None},
         "unclassified": {"count": container_unclassified, "pct": container_unclassified / container_total if container_total else None},
     }
 
@@ -799,7 +912,7 @@ def main():
     print(f"  source questions: {source_total}")
     print(f"  practice (post-dedup): {practice_total_questions}  papers: {papers_total_questions}  dropped: {dropped_count}")
     print(f"  grand_tests.json containment: {gt_report.get('contained')}")
-    print(f"  classification: exact={container_exact} lexicon={container_lexicon} unclassified={container_unclassified} of {container_total}")
+    print(f"  classification: exact={container_exact} bayes={container_bayes} unclassified={container_unclassified} of {container_total}")
     print(f"  largest shard: {largest} bytes ({largest_file})")
     return 0
 

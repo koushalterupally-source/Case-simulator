@@ -9,6 +9,10 @@
   --bg-gradient: radial-gradient(circle at 0% 0%, #e0f2fe, #f3f4f6);
   --glass: rgba(255, 255, 255, 0.85);
   --glass-solid: #ffffff;
+  /* Fixed bars need to be near-opaque. backdrop-filter is unreliable — it is ignored under some
+     compositors and disabled by some accessibility settings — and when it fails, scrolling text
+     shows straight through the navigation. */
+  --chrome: #f7f9fb;
   --border-c: rgba(255, 255, 255, 0.9);
   --hairline: rgba(15, 23, 42, 0.08);
   --shadow: 0 10px 30px rgba(31, 38, 135, 0.08);
@@ -45,6 +49,7 @@
     --bg-gradient: radial-gradient(circle at 50% 0%, #1e293b, #0f172a);
     --glass: rgba(30, 41, 59, 0.75);
     --glass-solid: #1e293b;
+    --chrome: #0d1626;
     --border-c: rgba(255, 255, 255, 0.08);
     --hairline: rgba(255, 255, 255, 0.08);
     --shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
@@ -70,6 +75,7 @@
   --bg-gradient: radial-gradient(circle at 50% 0%, #1e293b, #0f172a);
   --glass: rgba(30, 41, 59, 0.75);
   --glass-solid: #1e293b;
+  --chrome: #0d1626;
   --border-c: rgba(255, 255, 255, 0.08);
   --hairline: rgba(255, 255, 255, 0.08);
   --shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
@@ -89,6 +95,44 @@
   --violet: #a78bfa;
 }
 
+/* ui.js injects its own dialog, toast and busy-bar styles keyed to --pyq-* names. Alias them onto
+   the design tokens so that chrome follows the theme instead of sitting on a hardcoded white card.
+   These are `var()` references, so they re-resolve whenever the tokens above change. */
+:root {
+  --pyq-surface: var(--glass-solid);
+  --pyq-text: var(--text);
+  --pyq-accent: var(--accent);
+  --pyq-toast-bg: rgba(15, 23, 42, 0.92);
+  --pyq-toast-fg: #ffffff;
+}
+
+.pyq-dialog {
+  border: 1px solid var(--border-c);
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-lift);
+  font-family: var(--f-body);
+  padding: 22px !important;
+}
+.pyq-dialog h2 { font-size: 1.08rem !important; font-weight: 600; }
+.pyq-dialog p { color: var(--subtext); font-size: 0.92rem; line-height: 1.55; }
+.pyq-dialog-actions { gap: 10px !important; }
+.pyq-dialog-actions button {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--hairline);
+  background: transparent;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+.pyq-dialog-actions button:last-child {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+
 /* ---------- reset ---------- */
 
 * {
@@ -99,6 +143,11 @@
 }
 
 html { -webkit-text-size-adjust: 100%; }
+
+/* An explicit `display` in author CSS beats the UA stylesheet's [hidden] rule, so a hidden
+   element with `display: grid` or `display: flex` stays on screen. The tab bar and the exam
+   action bar are both of those, and both are hidden during a sitting. */
+[hidden] { display: none !important; }
 
 body {
   font-family: var(--f-body);
@@ -142,7 +191,7 @@ img { max-width: 100%; height: auto; }
   align-items: center;
   gap: 12px;
   padding: 0 14px;
-  background: var(--glass);
+  background: var(--chrome);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--hairline);
@@ -198,7 +247,7 @@ main {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  background: var(--glass);
+  background: var(--chrome);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-top: 1px solid var(--hairline);
@@ -252,6 +301,7 @@ main {
 
 .hero {
   grid-column: 1 / -1;
+  text-align: left;
   background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
   border: 0;
   color: #fff;
@@ -285,7 +335,7 @@ main {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -495,11 +545,13 @@ main {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 35;
+  /* Above the tab bar (40): both are fixed to the bottom, and on any screen that shows both the
+     action bar is the one being used. */
+  z-index: 45;
   display: flex;
   gap: 10px;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0));
-  background: var(--glass);
+  background: var(--chrome);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-top: 1px solid var(--hairline);
@@ -738,4 +790,8 @@ main {
   .hero__title { font-size: 1.9rem; }
   .actions { justify-content: center; }
   .actions .btn { max-width: 240px; }
+}
+
+@media (min-width: 520px) {
+  .stats { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
 }

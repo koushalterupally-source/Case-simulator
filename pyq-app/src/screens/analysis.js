@@ -21,8 +21,28 @@ const FILTERS = [
 
 let current = { result: null, filter: 'wrong', root: null };
 
+/**
+ * The result of the sitting that just finished, held in memory.
+ *
+ * Persistence can fail — private browsing, a full quota — and a candidate who has just spent three
+ * hours on a paper must still see their analysis. The store is the durable copy; this is the one
+ * that guarantees the screen renders.
+ */
+let lastResult = null;
+
+export function stash(result) {
+  lastResult = result;
+}
+
 export async function show(root, { sessionId }) {
-  const result = await store.get('results', sessionId);
+  let result = null;
+  try {
+    result = await store.get('results', sessionId);
+  } catch (err) {
+    console.warn('Could not read the saved result', err);
+  }
+  if (!result && lastResult && lastResult.sessionId === sessionId) result = lastResult;
+
   if (!result) {
     clear(root).appendChild(
       el('div', { class: 'empty' }, [
@@ -123,12 +143,15 @@ function subjectSection(breakdown) {
       { class: 'bars' },
       breakdown.subjects.map((s) => {
         const tone = s.accuracy >= 0.7 ? 'var(--green)' : s.accuracy >= 0.45 ? 'var(--amber)' : 'var(--red)';
-        return el('div', {}, [
+        const untouched = s.attempted === 0;
+        return el('div', { style: untouched ? { opacity: '0.45' } : {} }, [
           el('div', { class: 'bar__head' }, [
             el('span', { class: 'bar__name', text: s.subject }),
             el('span', {
               class: 'bar__val',
-              text: `${s.correct}/${s.attempted || 0} · ${pct(s.accuracy)} · ${duration(s.avgTimeMs)} avg`,
+              text: untouched
+                ? `${s.total} skipped`
+                : `${s.correct}/${s.attempted} · ${pct(s.accuracy)} · ${duration(s.avgTimeMs)} avg`,
             }),
           ]),
           el('div', { class: 'bar__track' }, [

@@ -165,9 +165,16 @@ def main():
         for shard_id in shard_ids:
             count, q_list, a_list = check_shard_pair(chk, shards_dir, shard_id)
             total_in_shards += count
-            # every question in a paper shard must carry a dupOf key (paper schema)
+            # every question in a paper shard must carry dupOf/confidence keys (paper schema)
             for item in q_list:
                 chk.ok("dupOf" in item, f"paper {pid} shard {shard_id}: item {item.get('id')} missing 'dupOf'")
+                chk.ok("confidence" in item, f"paper {pid} shard {shard_id}: item {item.get('id')} missing 'confidence'")
+                sf = item.get("subjectFrom")
+                chk.ok(sf in ("exact", "bayes", None),
+                       f"paper {pid} shard {shard_id}: item {item.get('id')} has unexpected subjectFrom={sf!r}")
+                if sf is None:
+                    chk.ok(item.get("subject") is None,
+                           f"paper {pid} shard {shard_id}: item {item.get('id')} has subjectFrom=null but subject={item.get('subject')!r}")
 
         chk.ok(total_in_shards == paper.get("count"),
                f"paper {pid}: catalog count={paper.get('count')} but shards contain {total_in_shards}")

@@ -55,6 +55,7 @@ function serve() {
       if (path === '/') path = '/index.html';
       const full = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));
       if (!existsSync(full)) {
+        process.stderr.write(`[server] 404 ${path} -> ${full}\n`);
         res.writeHead(404).end('not found');
         return;
       }
@@ -85,7 +86,10 @@ async function main() {
     process.exit(2);
   }
 
-  const { chromium } = await importPlaywright();
+  const pw = await importPlaywright();
+  // Playwright is CommonJS, so depending on how it resolves the named exports may sit under .default.
+  const chromium = pw.chromium || (pw.default && pw.default.chromium);
+  if (!chromium) throw new Error(`Playwright loaded but exposed no chromium (keys: ${Object.keys(pw)})`);
   const server = await serve();
   const base = `http://127.0.0.1:${server.address().port}`;
   await mkdir(SHOT_DIR, { recursive: true });
@@ -104,10 +108,18 @@ async function main() {
   const page = await context.newPage();
 
   const consoleErrors = [];
+  // The harness tears its own server down at the end of the run; that is not an app fault.
+  const HARNESS_NOISE = /ERR_CONNECTION_RESET|ERR_CONNECTION_REFUSED|ERR_ABORTED/;
   page.on('console', (m) => {
-    if (m.type() === 'error') consoleErrors.push(m.text());
+    if (m.type() === 'error' && !HARNESS_NOISE.test(m.text())) consoleErrors.push(m.text());
   });
   page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
+
+  // Every request the page makes, so the answer-key check can assert on the network rather than
+  // on the DOM — an answer key held in a JS variable would never show up in the markup.
+  const requests = [];
+  page.on('request', (r) => requests.push(r.url()));
+  const answerFetches = () => requests.filter((u) => u.includes('.a.json'));
 
   const shot = async (name) => {
     await page.screenshot({ path: join(SHOT_DIR, `${name}.png`) });
@@ -166,22 +178,53 @@ async function main() {
     } else {
       ok('paper sheet offers Start');
       await startBtn.click();
-      await page.waitForTimeout(1500);
+      // A 199-question shard takes a moment to fetch and parse; wait for the render, don't guess.
+      await page.waitForSelector('.option', { timeout: 30000 }).catch(() => {});
+      await page.waitForSelector('#gt-actions', { timeout: 15000 }).catch(() => {});
 
       const optionCount = await page.locator('.option').count();
       if (optionCount < 3) bad('GT renders a question with options', `saw ${optionCount}`);
       else ok(`GT renders a question with ${optionCount} options`);
 
+      await page.waitForSelector('#gt-clock', { timeout: 10000 }).catch(() => {});
       const clock = await page.locator('#gt-clock').textContent().catch(() => null);
       if (!clock || !/\d/.test(clock)) bad('GT shows a running clock');
       else ok(`GT clock reads ${clock}`);
 
-      // The answer key must not be anywhere in the page before submit.
-      const leak = await page.evaluate(() => {
-        const html = document.documentElement.outerHTML;
-        return /"correct"\s*:/.test(html) || /data-correct/.test(html);
+      // Nothing may sit on top of the exam controls — two fixed bottom bars is the classic way
+      // for a tap to land on the wrong thing.
+      const overlap = await page.evaluate(() => {
+        const visible = (sel) => {
+          const node = document.querySelector(sel);
+          if (!node) return null;
+          const style = getComputedStyle(node);
+          if (style.display === 'none' || style.visibility === 'hidden') return null;
+          return node.getBoundingClientRect();
+        };
+        const tabs = visible('#tabbar');
+        const actions = visible('#gt-actions');
+        if (!tabs || !actions) return { both: false };
+        const clash = !(tabs.bottom <= actions.top || actions.bottom <= tabs.top);
+        return { both: true, clash };
       });
-      if (leak) bad('answer key absent from the DOM before submit');
+      if (overlap.both && overlap.clash) bad('exam controls are not covered', 'tab bar overlaps the action bar');
+      else ok('exam controls are not covered');
+
+      const actionsVisible = await page.locator('#gt-actions').isVisible().catch(() => false);
+      if (!actionsVisible) bad('exam action bar is visible');
+      else ok('exam action bar is visible');
+
+      // The answer key must not have been fetched at all yet — not hidden, not merely off-screen.
+      const early = answerFetches();
+      if (early.length > 0) {
+        bad('no answer file fetched before submit', `${early.length}: ${early[0]}`);
+      } else ok('no answer file fetched before submit');
+
+      const domLeak = await page.evaluate(() => {
+        const markup = document.documentElement.outerHTML;
+        return /"correct"\s*:/.test(markup) || /data-correct/.test(markup);
+      });
+      if (domLeak) bad('answer key absent from the DOM before submit');
       else ok('answer key absent from the DOM before submit');
       await shot('06-gt-question');
 
@@ -223,7 +266,13 @@ async function main() {
       await shot('08-submit-confirm');
       const confirmBtn = page.locator('button', { hasText: /^Submit$/ }).last();
       await confirmBtn.click();
-      await page.waitForTimeout(2000);
+      await page.waitForSelector('.hero__title', { timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(500);
+
+      // Nothing that belongs to the sitting may survive into the analysis screen.
+      const strays = await page.locator('#gt-actions, #gt-clock, .sheet-backdrop').count();
+      if (strays > 0) bad('sitting chrome removed after submit', `${strays} left behind`);
+      else ok('sitting chrome removed after submit');
 
       // ---- analysis -------------------------------------------------------
       const heroText = await page.locator('.hero__title').first().textContent().catch(() => '');
@@ -233,6 +282,10 @@ async function main() {
       const reviewItems = await page.locator('.review__item').count();
       if (reviewItems === 0) bad('analysis lists reviewable questions');
       else ok(`analysis lists ${reviewItems} reviewable questions`);
+
+      const afterSubmit = answerFetches();
+      if (afterSubmit.length === 0) bad('answer file fetched at submit', 'never requested');
+      else ok(`answer file fetched at submit (${afterSubmit.length} request(s))`);
 
       const nan = (await page.locator('body').innerText()).includes('NaN');
       if (nan) bad('no NaN anywhere in the analysis');
@@ -248,13 +301,21 @@ async function main() {
     }
 
     // ---- review and stats -------------------------------------------------
-    for (const screen of ['review', 'stats']) {
-      await page.evaluate((s) => location.assign(`#/${s}`), screen);
-      await page.reload({ waitUntil: 'networkidle' });
-      await page.waitForTimeout(900);
+    for (const screen of ['review', 'stats', 'home']) {
+      // Navigate the way a user does. A reload here would wait on networkidle that the review
+      // screen, which streams shards to resolve its mistake bank, may never reach.
+      await page.click(`.tabbar__item[data-screen="${screen}"]`);
+      await page.waitForTimeout(1500);
       const text = (await page.locator('body').innerText()).trim();
       if (text.length < 10) bad(`${screen} screen renders`);
       else ok(`${screen} screen renders`);
+
+      const err = await page.locator('.boot-error').count();
+      if (err > 0) {
+        const detail = await page.locator('.boot-error code').textContent().catch(() => '');
+        bad(`${screen} screen renders without error`, detail);
+      } else ok(`${screen} screen renders without error`);
+
       await shot(`10-${screen}`);
     }
 
