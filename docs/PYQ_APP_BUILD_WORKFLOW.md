@@ -32,10 +32,17 @@ A **single-page, offline-first PYQ (previous-year-question) app** for Indian PG 
 - a **PWA** deployed to GitHub Pages, and
 - an **Android APK** that wraps the same assets in a WebView.
 
-Core loop: pick a question source → pick a subject → pick a session/topic → answer MCQs one at a time →
-see the explanation immediately → progress and mistakes are saved locally → resume later.
+There are two modes, and they are deliberately different products sharing one data layer:
 
-**It must work with the plane on airplane mode.** No server, no login, no API key required for the core loop.
+**Practice mode** — pick a question source → pick a subject → pick a session/topic → answer MCQs one at a
+time → see the explanation immediately → progress and mistakes saved locally → resume later.
+
+**Grand Test mode** — sit a full ~200-question mock paper under exam conditions: a countdown timer, a
+question palette, mark-for-review, no feedback until you submit. Then a real analysis screen: score,
+subject-wise accuracy, time per question, and every question reviewable with its full explanation. 229 such
+papers already exist in the data. This is specified in full at §7 Phase 5.
+
+**It must work with the plane on airplane mode.** No server, no login, no API key required for either mode.
 
 ---
 
@@ -77,6 +84,26 @@ plus a date: `"ALL INDIA MEDICOS TEST - 2024 BATCH - 2024-12-22"`.
 
 The UI must reflect this. PYQ browses **by exam session**; CEREB browses **by topic**; the mock-paper files
 browse **by test**. One flat "subject → subtopic" grid for all three is wrong and will feel wrong.
+
+### The mock papers are real full-length tests
+
+This matters because it makes a Grand Test mode possible without authoring anything. The five container
+files hold **229 discrete papers**, each one a complete sitting:
+
+| File | Questions | Papers | Paper size (min / median / max) | Date range |
+|---|---:|---:|---|---|
+| `grand_tests_2.json` | 9,605 | 65 | 28 / 196 / 200 | 2023-04-16 → 2025-07-15 |
+| `grand_tests.json` | 9,412 | 64 | 28 / 196 / 200 | *subset of the above — drop it* |
+| `previous_year_tests.json` | 8,290 | 37 | 120 / 199 / 397 | 2017-05-07 → 2025-01-12 |
+| `best_of_the_rest.json` | 6,446 | 57 | 39 / 99 / 200 | 2023-08-22 → 2025-06-07 |
+| `best_of_the_rest_subject_wise.json` | 1,039 | 6 | 50 / 198 / 200 | 2025-03-11 → 2025-07-15 |
+
+Every paper's `subtopic` ends in a parseable `YYYY-MM-DD` — all 229 of them, no exceptions — so papers sort
+chronologically for free. Strip the trailing date for the display name.
+
+Median paper length is a genuine ~200 questions, which is a real NEET-PG/INI-CET-length sitting. Anything
+under about 50 is a topic quiz, not a grand test, and should be labelled as such rather than launched with a
+three-hour timer.
 
 ---
 
@@ -132,6 +159,8 @@ These are measured, not hypothetical. Handling them is Phase 1 work.
 | **Pseudo-subjects** | `Grand Tests`, `Grand Tests 2`, `Best of the Rest`, `Previous Year Tests` are containers, not subjects | They dominate a subject grid by size and mean nothing to a student browsing by subject |
 | **Cross-bank overlap** | 181 questions appear in both `pyq/` and `cereb/previous_year_tests.json` | Minor, but breaks "unseen questions only" modes |
 | **Arbitrary HTML in explanations** | 48,457 records contain tags — `br`, `p`, `strong`, `li`, `ul`, `img`, `div` | Must be rendered as HTML, and must be sanitized before it goes in the DOM |
+| **`grand_tests.json` is redundant** | 100% of its 9,081 unique questions also appear in `grand_tests_2.json`; 64 of its 65 papers are shared | 9,412 duplicate questions and 10.6 MB of payload for one extra paper |
+| **Mock-test questions carry no subject** | All 34,792 container-file questions have `subject: "Grand Tests"` etc. Only 1,846 (5.3%) can be resolved to a real subject by exact text match | Subject-wise analysis of a mock test is **impossible from the data as shipped** — see §7 Phase 5 |
 
 ### Required handling
 
@@ -147,8 +176,11 @@ These are measured, not hypothetical. Handling them is Phase 1 work.
 4. **Flag, don't hide, stub explanations.** Mark them in the index with `hasExplanation: false` and let the
    user filter to "questions with full explanations". Showing "Ans: C" alone with no elaboration is honest;
    showing an empty panel is not.
-5. **Canonicalize subject names** through an explicit map. Route the four container files to a separate
+5. **Canonicalize subject names** through an explicit map. Route the container files to a separate
    "Mock Tests" section rather than into the subject grid.
+6. **Drop `grand_tests.json` entirely** and read grand tests from `grand_tests_2.json`. Verify the 100%
+   containment yourself before deleting anything from the index, and report the result.
+7. **Classify container questions by subject at build time** — never at runtime. See Phase 5.
 
 ---
 
@@ -235,8 +267,9 @@ The `MainActivity.java` in `Medqbank` already serves assets over a virtual `http
 
 ### Payload budget
 
-97.6 MB raw, roughly 25 MB gzipped (measured: `grand_tests.json` is 10.6 MB raw, 2.4 MB gzipped). GitHub
-Pages gzips automatically; the Android build compresses assets in the APK. Both are acceptable.
+97.6 MB raw, roughly 25 MB gzipped (measured: `grand_tests.json` is 10.6 MB raw, 2.4 MB gzipped). Dropping
+the redundant `grand_tests.json` takes 10.6 MB off that before any other work. GitHub Pages gzips
+automatically; the Android build compresses assets in the APK. Both are acceptable.
 
 What is **not** acceptable is `JSON.parse` on a 10.6 MB file on a mid-range phone during a tap handler.
 Phase 1 must shard the container files: one file per test session, not one file per bank. Target **no single
@@ -311,16 +344,79 @@ explanation HTML renders with lists and line breaks intact; a stub explanation s
 not an empty box; a remote image shows the offline placeholder with airplane mode on; no XSS from a crafted
 `detail` string (test one).
 
-### Phase 5 — Persistence
+### Phase 5 — Grand Test session and analysis
+
+This is the headline feature and the largest single phase. Budget for it accordingly; do not fold it into
+Phase 4.
+
+**The test itself.** A GT session is a full paper from §2's table, run under exam conditions:
+
+- **Paper picker** — the 229 papers, grouped by source, sorted newest first (dates are already parseable),
+  showing question count, duration and whether the user has attempted it before. Papers under ~50 questions
+  are labelled "quiz", not "grand test".
+- **Marking scheme is a setting, not an assumption.** Default `+1 / 0 / 0` (correct / wrong / skipped) with
+  a negative-marking option (`+4 / −1` is the common coaching mock scheme). Never hardcode one — different
+  exams differ and the data does not record which applies.
+- **Timer** — default 1 minute per question, rounded to the nearest 5 minutes, user-overridable. Counts
+  down, warns at 10 minutes and 1 minute, **auto-submits at zero**. Elapsed time is persisted continuously,
+  so a crash or a phone call does not lose the sitting.
+- **Question palette** — the grid every Indian test-taker expects: numbered cells colour-coded answered /
+  unanswered / marked-for-review / answered-and-marked, tappable to jump. It is the primary navigation
+  during a GT; a plain Next button is not enough for a 200-question paper.
+- **Per-question controls** — Save & Next, Clear Response, Mark for Review & Next.
+- **No feedback during the test.** Correct answers and explanations stay hidden until submit. Enforce this
+  in the data layer — do not ship the answer key to the DOM and rely on CSS to hide it.
+- **Submit** — confirmation dialog showing the counts of answered, unanswered and marked.
+- **Record per-question time** as the session runs. The analysis screen is far more useful with it and it
+  cannot be reconstructed afterwards.
+
+**The analysis.** This is what makes the mode worth building, so give it a real screen, not a modal:
+
+1. **Result header** — score against the chosen scheme, accuracy, attempted / correct / wrong / skipped,
+   total time, and comparison against the user's previous attempts of the same paper.
+2. **Subject-wise breakdown** — accuracy and average time per subject, weakest three called out. This
+   depends on the classification described below.
+3. **Time analysis** — time per question, with the questions where the user spent over ~2 minutes flagged,
+   split by whether that time bought a correct answer or not.
+4. **Question review** — the full list, filterable by *wrong / skipped / marked / correct / all*. Each entry
+   shows the question, every option with the user's choice and the correct one both marked, the time spent,
+   and the **full sanitized explanation HTML**. This is the "analyse it, explanation and all" the app exists
+   for; it should be the most polished screen in the build.
+5. **Mistake bank** — every wrong and skipped question flows into a persistent bank that the review and
+   bookmark screens read, so a GT feeds later study instead of ending at a score.
+6. **Export** the whole analysis as JSON.
+
+**The subject-classification problem.** Container-file questions all carry
+`subject: "Grand Tests"`. Only 5.3% (1,846 of 34,792) can be resolved to a real subject by exact text
+match against the subject-tagged banks, so a subject-wise breakdown cannot be built from the data as it
+ships. Resolve it **at build time, in Phase 1's script, baked into `index.json`** — never at runtime:
+
+- First pass: exact and near-exact text match against the 12,426 subject-tagged questions (recovers ~5%).
+- Second pass: a keyword lexicon per subject, built from the subject-tagged corpus. Store a
+  `subjectConfidence` alongside the guess.
+- Anything still unresolved is labelled **"Unclassified"** in the UI and excluded from the subject
+  breakdown's denominators. Show the unclassified count honestly rather than silently distributing it.
+- If an LLM pass is used to classify, it runs **once, offline, at build time**, and its output is committed
+  as data. The app itself never calls a model.
+
+**Gate:** a full 200-question paper runs start to finish on a phone with the timer accurate to within 2
+seconds over the sitting; the palette reflects state correctly for all four states; force-killing the app
+mid-paper and relaunching restores the exact question, every saved answer, every review mark, and the
+correct remaining time; the answer key is provably absent from the DOM before submit (check in devtools);
+the analysis screen renders every section with real numbers; subject breakdown reports its unclassified
+count; a wrong answer appears in the mistake bank afterwards.
+
+### Phase 6 — Persistence
 
 IndexedDB attempt history, resume-in-progress sessions, bookmarks screen, and a stats screen (attempted,
-accuracy, per-subject breakdown). Export/import of all user data as a single JSON file.
+accuracy, per-subject breakdown) spanning both practice and GT sessions. Export/import of all user data as a
+single JSON file.
 
 **Gate:** kill the app mid-session and relaunch — the session resumes at the right question with prior
-answers intact; export then import into a cleared profile reproduces identical stats; private-browsing mode
-still renders the app (degraded, not broken).
+answers intact; export then import into a cleared profile reproduces identical stats, GT history included;
+private-browsing mode still renders the app (degraded, not broken).
 
-### Phase 6 — Offline and packaging
+### Phase 7 — Offline and packaging
 
 Service worker precaching the shell and `index.json`, with a runtime cache for question shards. Copy the
 `deploy-pages.yml` and `build-apk.yml` workflows from `Medqbank`. Point the Pages workflow at the assets
@@ -335,10 +431,29 @@ answered JS requests with HTML and white-screened the app (commit `5d55930`). Ve
 `skipWaiting()` + `clients.claim()`, never serve `index.html` as a fallback for a `.js` or `.json` request,
 and ship a `?reset` query parameter that unregisters the worker and clears caches.
 
-### Phase 7 — QA gate
+### Phase 8 — QA gate
 
 Full pass on a real Android device and a desktop browser. Verify every gate above still holds. Produce a
 short release note listing what shipped, what did not, and every known limitation.
+
+**"No bugs" is a process, not a wish.** The gates above catch feature bugs; this phase catches the ones that
+only appear in combination. Run each of these deliberately and record the result:
+
+| Class | The specific test |
+|---|---|
+| **Timer drift** | Compare a GT timer against a wall clock over a full 200-question sitting. Drift comes from `setInterval` accumulating error — derive remaining time from a stored end timestamp, never by decrementing a counter. |
+| **Backgrounding** | Background the app mid-GT for 5 minutes and return. Time must have advanced correctly, not frozen. |
+| **Interruption** | Force-kill mid-GT, mid-practice, and mid-explanation. Relaunch each time. |
+| **Rotation** | Rotate the device on every screen. Nothing may lose state or clip. |
+| **Rapid input** | Double-tap Submit, Next, and an option. No double-advance, no double-scored answer. |
+| **Back button** | Hardware back on every screen, including mid-GT. It must never silently discard a sitting. |
+| **Empty and edge states** | A 28-question paper, a paper with a 3-option question, a subject with zero bookmarks, a fresh install with no history, an all-skipped GT (0 attempted — check for a divide-by-zero in accuracy). |
+| **Storage failure** | Private-browsing mode, and a full quota. The app degrades; it does not white-screen. |
+| **Offline** | Airplane mode from cold boot, and airplane mode toggled on mid-GT. |
+| **Stale worker** | Deploy an update over an installed copy and confirm the new version loads. This is the exact failure that white-screened a sibling repo. |
+| **Injection** | A question whose `explanation.detail` contains `<img src=x onerror=alert(1)>`. Nothing executes. |
+
+Write these up as a checklist in the repo and re-run it before every release, not just this one.
 
 ---
 
@@ -359,6 +474,13 @@ These are the rules that come from things that have already gone wrong in these 
 7. **Never commit build artifacts.** `medquiz-app` has `android/app/build/` checked in; do not repeat it.
    Add a `.gitignore` first.
 8. **Never claim a phase gate passed without running it.** Paste the actual output.
+9. **Never derive a countdown by decrementing a counter on an interval.** Store the end timestamp and
+   compute remaining time from `Date.now()`, or the timer drifts and stops entirely when the app is
+   backgrounded.
+10. **Never send the answer key to the client during a GT.** Hiding it with CSS or a JS flag is not hiding
+    it. Withhold it in the data layer until submit.
+11. **Never classify, score, or dedupe at runtime what can be done at build time.** The phone does lookups;
+    the build script does the thinking.
 
 ---
 
@@ -368,6 +490,13 @@ Run this before declaring the app done.
 
 - [ ] Every subject and bank reachable; counts match the manifests
 - [ ] Dedup report reconciles to the 49,293 total
+- [ ] `grand_tests.json` containment verified before it was dropped
+- [ ] All 229 GT papers launchable; timer accurate over a full sitting; palette states correct
+- [ ] GT survives a force-kill with answers, marks and remaining time intact
+- [ ] Answer key absent from the DOM before GT submit
+- [ ] Analysis screen renders every section; unclassified count reported honestly
+- [ ] Wrong answers land in the mistake bank
+- [ ] Phase 8 bug-class table run in full, results recorded
 - [ ] Explanations render with formatting; stubs are flagged, not blank
 - [ ] Remote images degrade gracefully offline; no broken-image icons
 - [ ] Airplane-mode cold boot works
@@ -415,8 +544,13 @@ Do not modify anything under assets/pyq/ or assets/cereb/.
 | Unique question texts | 2,877 | — | 33,930 |
 | Raw JSON | ~42 MB | ~52 MB | 97.6 MB |
 
-Largest files: `cereb/grand_tests_2.json` (9,605 q, 10.9 MB), `cereb/grand_tests.json` (9,412 q, 10.6 MB),
-`cereb/previous_year_tests.json` (8,290 q, 10.2 MB), `cereb/best_of_the_rest.json` (6,446 q, 5.2 MB).
+Largest files: `cereb/grand_tests_2.json` (9,605 q, 10.9 MB), `cereb/grand_tests.json` (9,412 q, 10.6 MB —
+a strict subset of the former), `cereb/previous_year_tests.json` (8,290 q, 10.2 MB),
+`cereb/best_of_the_rest.json` (6,446 q, 5.2 MB).
+
+Mock papers available to Grand Test mode: **229 total**, or **165 after dropping the redundant
+`grand_tests.json`**. Every paper's name ends in a parseable `YYYY-MM-DD`, spanning 2017-05-07 to
+2025-07-15. Median paper length is 196–199 questions.
 
 Subjects present across both banks, after canonicalization: Anatomy, Anaesthesia, Biochemistry, Dermatology,
 ENT, Forensic Medicine, Medicine, Microbiology, Obstetrics & Gynaecology, Ophthalmology, Orthopaedics,
