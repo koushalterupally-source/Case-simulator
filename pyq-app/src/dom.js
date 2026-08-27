@@ -47,28 +47,36 @@ export function html(container, dirty) {
  */
 export function markOfflineImages(container) {
   for (const img of container.querySelectorAll('img')) {
-    if (img.dataset.pyqHandled) continue;
-    img.dataset.pyqHandled = '1';
-    if ((img.getAttribute('src') || '').startsWith('data:')) continue;
-
-    img.addEventListener('error', () => {
-      if (img.dataset.pyqFailed) return;
-      img.dataset.pyqFailed = '1';
-      const src = img.getAttribute('src');
-      const placeholder = el('button', {
-        class: 'imgfallback',
-        type: 'button',
-        text: navigator.onLine ? 'Image failed to load — tap to retry' : 'Image unavailable offline — tap to retry',
-        onclick: () => {
-          const retry = el('img', { src, alt: img.getAttribute('alt') || '' });
-          markOfflineImages(placeholder.parentNode ? placeholder : container);
-          placeholder.replaceWith(retry);
-          markOfflineImages(retry.parentNode || container);
-        },
-      });
-      img.replaceWith(placeholder);
-    });
+    watchImage(img);
   }
+}
+
+function watchImage(img) {
+  if (img.dataset.pyqHandled) return;
+  img.dataset.pyqHandled = '1';
+
+  // Inline data: images always render, offline included — nothing to guard against.
+  if ((img.getAttribute('src') || '').startsWith('data:')) return;
+
+  img.addEventListener('error', () => {
+    const src = img.getAttribute('src');
+    const alt = img.getAttribute('alt') || '';
+
+    const placeholder = el('button', {
+      class: 'imgfallback',
+      type: 'button',
+      text: navigator.onLine
+        ? 'Image failed to load — tap to retry'
+        : 'Image unavailable offline — tap to retry',
+      onclick: () => {
+        const retry = el('img', { src, alt });
+        watchImage(retry);
+        placeholder.replaceWith(retry);
+      },
+    });
+
+    img.replaceWith(placeholder);
+  });
 }
 
 export function clear(node) {
