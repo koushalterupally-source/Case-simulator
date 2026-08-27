@@ -3,8 +3,12 @@
 // fallback would 404. Derive the scope from where this file actually lives.
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
 // Bump on every release that changes asset hashes — activate() deletes every
-// cache that isn't this one, which is what evicts a stale shell.
+// *own* cache that isn't this one, which is what evicts a stale shell.
 const CACHE_NAME = 'pyq-ccs-v4';
+// This app is served alongside a sibling app (caches named 'pyq-shell-*' and
+// 'pyq-data-*') from the same origin. activate() must only ever touch caches
+// it owns, matched by this prefix, or it will delete the sibling's caches.
+const CACHE_PREFIX = 'pyq-ccs-';
 const OFFLINE_FALLBACK = BASE + 'index.html';
 // The hashed JS/CSS bundles are injected here at build time by the sw-precache
 // plugin in vite.config.ts. Without this they are only cached once the worker is
@@ -27,7 +31,11 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.map((key) => (key !== CACHE_NAME ? caches.delete(key) : undefined))))
+      .then((keys) =>
+        Promise.all(
+          keys.map((key) => (key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME ? caches.delete(key) : undefined))
+        )
+      )
       .then(() => self.clients.claim())
   );
 });

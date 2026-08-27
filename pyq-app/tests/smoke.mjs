@@ -10,11 +10,15 @@
 
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { extname, join, normalize } from 'node:path';
+import { existsSync, statSync } from 'node:fs';
+import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const rootArg = process.argv.indexOf('--root');
+const ROOT =
+  rootArg !== -1 && process.argv[rootArg + 1]
+    ? resolve(process.argv[rootArg + 1])
+    : fileURLToPath(new URL('..', import.meta.url));
 
 /**
  * The app has no package.json by design, so Playwright is never a local dependency. Resolve it from
@@ -53,7 +57,10 @@ function serve() {
     try {
       let path = decodeURIComponent(req.url.split('?')[0]);
       if (path === '/') path = '/index.html';
-      const full = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));
+      let full = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));
+      // A directory request serves its index.html, the way a real static host does. Without this,
+      // /simulator/ reads a directory and fails with a 500.
+      if (existsSync(full) && statSync(full).isDirectory()) full = join(full, 'index.html');
       if (!existsSync(full)) {
         process.stderr.write(`[server] 404 ${path} -> ${full}\n`);
         res.writeHead(404).end('not found');
@@ -109,11 +116,13 @@ async function main() {
 
   const consoleErrors = [];
   // The harness tears its own server down at the end of the run; that is not an app fault.
-  const HARNESS_NOISE = /ERR_CONNECTION_RESET|ERR_CONNECTION_REFUSED|ERR_ABORTED/;
+  const HARNESS_NOISE = /ERR_CONNECTION_RESET|ERR_CONNECTION_REFUSED|ERR_ABORTED|Failed to load resource/;
   page.on('console', (m) => {
     if (m.type() === 'error' && !HARNESS_NOISE.test(m.text())) consoleErrors.push(m.text());
   });
   page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
+  const failedRequests = [];
+  page.on('requestfailed', (r) => failedRequests.push(`${r.url()} :: ${r.failure()?.errorText}`));
 
   // Every request the page makes, so the answer-key check can assert on the network rather than
   // on the DOM — an answer key held in a JS variable would never show up in the markup.
@@ -302,9 +311,12 @@ async function main() {
 
     // ---- review and stats -------------------------------------------------
     for (const screen of ['review', 'stats', 'home']) {
-      // Navigate the way a user does. A reload here would wait on networkidle that the review
-      // screen, which streams shards to resolve its mistake bank, may never reach.
-      await page.click(`.tabbar__item[data-screen="${screen}"]`);
+      // Review no longer has a tab of its own — Cases took that slot — so reach it the way the
+      // Home card does. A reload here would wait on a networkidle the review screen, which
+      // streams shards to resolve its mistake bank, may never reach.
+      const tab = await page.locator(`.tabbar__item[data-screen="${screen}"]`).count();
+      if (tab > 0) await page.click(`.tabbar__item[data-screen="${screen}"]`);
+      else await page.evaluate((s) => window.__pyqNav(s), screen);
       await page.waitForTimeout(1500);
       const text = (await page.locator('body').innerText()).trim();
       if (text.length < 10) bad(`${screen} screen renders`);
@@ -318,6 +330,59 @@ async function main() {
 
       await shot(`10-${screen}`);
     }
+
+    // ---- the case simulator handoff ---------------------------------------
+    const casesTab = await page.locator('.tabbar__item[data-screen="cases"]').count();
+    if (casesTab === 0) bad('the Cases tab is present');
+    else ok('the Cases tab is present');
+
+    if (existsSync(join(ROOT, 'simulator', 'index.html'))) {
+      await page.click('.tabbar__item[data-screen="cases"]');
+      await page.waitForLoadState('load').catch(() => {});
+      // The simulator fetches its whole 8,211-question index (17 subject files) on first boot and
+      // caches it into IndexedDB. Tearing the page down mid-flight would abort those requests and
+      // read as a same-origin failure.
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await page.waitForTimeout(1500);
+
+      if (!page.url().includes('/simulator/')) bad('Cases opens the simulator', `at ${page.url()}`);
+      else ok('Cases opens the simulator');
+
+      const simText = (await page.locator('body').innerText()).trim();
+      if (simText.length < 20) bad('simulator renders content', `only ${simText.length} chars`);
+      else ok('simulator renders content');
+
+      // One product means one theme: the simulator must honour the shell's stored choice.
+      const simTheme = await page.evaluate(() => ({
+        attr: document.documentElement.getAttribute('data-theme'),
+        stored: (() => { try { return localStorage.getItem('pyq-theme'); } catch { return null; } })(),
+        bg: getComputedStyle(document.body).backgroundColor,
+      }));
+      if (simTheme.stored && simTheme.attr !== simTheme.stored) {
+        bad('simulator honours the shared theme', `stored ${simTheme.stored}, applied ${simTheme.attr}`);
+      } else ok(`simulator honours the shared theme (${simTheme.attr || 'system'})`);
+
+      await shot('11-simulator');
+
+      const back = await page.locator('a[href="../"], a[href="/"]').count();
+      if (back === 0) bad('simulator offers a way back to PYQ');
+      else ok('simulator offers a way back to PYQ');
+    } else {
+      steps.push('  skip the simulator handoff — not staged in this root');
+    }
+
+    // A failed request to another origin is not this app's fault, and in an offline-first app it is
+    // the expected case: the S3 question images and Google Fonts are both unreachable on a plane,
+    // and both have designed fallbacks. A SAME-ORIGIN failure is always a real bug.
+    // ERR_ABORTED means the request was cancelled, not that it failed — the simulator's service
+    // worker reloads the page when it takes control, which cancels whatever was in flight. Only a
+    // request that genuinely could not be served is a bug.
+    const sameOrigin = failedRequests.filter((f) => f.startsWith(base) && !f.includes('ERR_ABORTED'));
+    if (sameOrigin.length > 0) bad('no same-origin request failed', sameOrigin.slice(0, 3).join(' | '));
+    else ok('no same-origin request failed');
+
+    const external = failedRequests.length - sameOrigin.length;
+    if (external > 0) steps.push(`  note ${external} external request(s) unreachable (fonts / remote images) — expected offline`);
 
     if (consoleErrors.length > 0) {
       bad('no console errors', `${consoleErrors.length}: ${consoleErrors.slice(0, 4).join(' | ')}`);

@@ -75,6 +75,12 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return; // fonts and remote images go straight to the network
 
+  // The clinical case simulator is a separate bundle with its own service worker scoped to
+  // ./simulator/. This worker's scope is broader, so without this it would answer the very first
+  // navigation there — before the simulator's own worker registers — and hand back THIS app's
+  // shell as the offline fallback, loading the wrong app.
+  if (url.pathname.includes('/simulator/')) return;
+
   // Question shards: cache-first, and keep what we fetch so a revisited topic works offline.
   if (url.pathname.includes('/data/shards/')) {
     event.respondWith(cacheFirst(request, DATA_CACHE));

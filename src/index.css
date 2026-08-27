@@ -1,48 +1,82 @@
 @import "tailwindcss";
 
 /*
-  A quiet, readable reading surface. The old UI was a dashboard — dense panels,
-  neon accents, monospace everywhere. This is a transcript: one column, warm
-  paper, a single accent colour, and type you can read for an hour.
+  Shared visual identity with the sibling PYQ app: same token names as before
+  (every component references them, so renaming would be a large, risky diff
+  for no gain), but the palette, background wash, and theme-switch mechanics
+  now match theirs so the two ship as one product.
+
+  Theme resolves in three states, in this order of precedence:
+    1. :root[data-theme='dark' | 'light']   — explicit choice, persisted in
+       localStorage under 'pyq-theme' and applied before first paint (see
+       index.html) and via the in-app toggle (see StartScreen).
+    2. @media (prefers-color-scheme: dark) with :root:not([data-theme='light'])
+       — no explicit choice yet, OS is dark.
+    3. bare :root — light, the default.
 */
 :root {
-  --bg: #faf9f5;
+  --bg: #f3f4f6;
   --surface: #ffffff;
-  --surface-sunken: #f2f0e9;
-  --border: #e6e3da;
-  --border-strong: #d6d2c6;
-  --text: #1f1e1d;
-  --text-muted: #73716c;
-  --text-faint: #9d9a92;
-  --accent: #c96442;
-  --accent-soft: #f5e9e3;
-  --ok: #4f7a52;
-  --ok-soft: #eaf1e9;
-  --warn: #a8742a;
-  --warn-soft: #f8efe0;
-  --danger: #a63d32;
-  --danger-soft: #f8e8e5;
+  --surface-sunken: #eef2f6;
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --text: #1f2937;
+  --text-muted: #6b7280;
+  --text-faint: #9ca3af;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.1);
+  --ok: #16a34a;
+  --ok-soft: rgba(22, 163, 74, 0.12);
+  --warn: #d97706;
+  --warn-soft: rgba(217, 119, 6, 0.14);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.12);
+
+  --bg-gradient: radial-gradient(circle at 0% 0%, #e0f2fe, #f3f4f6);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #262624;
-    --surface: #30302e;
-    --surface-sunken: #1f1f1d;
-    --border: #3f3f3b;
-    --border-strong: #55554f;
-    --text: #f2f0ea;
-    --text-muted: #a5a29a;
-    --text-faint: #7c7a73;
-    --accent: #d97757;
-    --accent-soft: #3a2b25;
-    --ok: #86b18a;
-    --ok-soft: #242c24;
-    --warn: #d9a441;
-    --warn-soft: #332a1a;
-    --danger: #e08573;
-    --danger-soft: #3a2523;
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-sunken: #16212f;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-faint: #64748b;
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.14);
+    --ok: #4ade80;
+    --ok-soft: rgba(74, 222, 128, 0.15);
+    --warn: #fbbf24;
+    --warn-soft: rgba(251, 191, 36, 0.16);
+    --danger: #f87171;
+    --danger-soft: rgba(248, 113, 113, 0.15);
+
+    --bg-gradient: radial-gradient(circle at 50% 0%, #1e293b, #0f172a);
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-sunken: #16212f;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+  --accent: #38bdf8;
+  --accent-soft: rgba(56, 189, 248, 0.14);
+  --ok: #4ade80;
+  --ok-soft: rgba(74, 222, 128, 0.15);
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.16);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.15);
+
+  --bg-gradient: radial-gradient(circle at 50% 0%, #1e293b, #0f172a);
 }
 
 html,
@@ -52,8 +86,10 @@ body {
 }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  background-image: var(--bg-gradient);
+  background-attachment: fixed;
+  font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
   font-size: 16px;
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
@@ -80,6 +116,13 @@ body {
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.875rem;
+}
+
+/* Display/numeral face shared with the sibling app; used sparingly, only on
+   headings that are already display-weight. Falls back cleanly if the
+   webfont never loads (offline). */
+.font-display {
+  font-family: "Orbitron", "Poppins", system-ui, sans-serif;
 }
 
 @keyframes fade-rise {

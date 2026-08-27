@@ -35,7 +35,7 @@ export const Scorecard: React.FC<ScorecardProps> = ({ session, onNewCase, onBack
           ← Back to case
         </button>
 
-        <h1 className="text-[22px] font-semibold tracking-tight">Case complete</h1>
+        <h1 className="font-display text-[22px] font-semibold tracking-tight">Case complete</h1>
         <p className="mt-1.5 text-[15px]" style={{ color: 'var(--text-muted)' }}>
           {session.patient.name} · {card.finalDiagnosis}
         </p>
@@ -49,7 +49,7 @@ export const Scorecard: React.FC<ScorecardProps> = ({ session, onNewCase, onBack
             { v: `${stats.xp}`, l: 'XP' },
           ].map((s) => (
             <div key={s.l}>
-              <div className="text-[26px] font-semibold tnum leading-none">{s.v}</div>
+              <div className="font-display text-[26px] font-semibold tnum leading-none">{s.v}</div>
               <div className="text-[13px] mt-1" style={{ color: 'var(--text-faint)' }}>
                 {s.l}
               </div>

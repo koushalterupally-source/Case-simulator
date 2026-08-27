@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Unified staged site produced by pyq-app/build/stage.sh
+site/

@@ -19,7 +19,19 @@ import * as analysis from './screens/analysis.js';
 import * as review from './screens/review.js';
 import * as stats from './screens/stats.js';
 
-const TAB_SCREENS = new Set(['home', 'practice', 'tests', 'review', 'stats']);
+const TAB_SCREENS = new Set(['home', 'practice', 'tests', 'cases', 'review', 'stats']);
+
+/**
+ * The clinical case simulator is a separate bundle served from ./simulator/, not a screen in this
+ * app. It keeps its own React runtime and its own question index; sharing the palette, the theme
+ * key and the navigation is what makes the two read as one product. A real navigation is correct
+ * here — there is nothing to preserve in this app's memory while a case is being worked.
+ */
+const SIMULATOR_PATH = 'simulator/';
+
+function openSimulator() {
+  location.assign(SIMULATOR_PATH);
+}
 
 let root = null;
 let catalog = null;
@@ -34,6 +46,10 @@ export async function boot() {
 
   wireChrome();
   ui.onNavigate(handleNavigate);
+
+  // A tiny navigation hook for the end-to-end test, which needs to reach screens that no longer
+  // have a tab of their own.
+  window.__pyqNav = (screen, params) => ui.navigate(screen, params || {});
 
   catalog = await data.loadCatalog();
 
@@ -66,7 +82,10 @@ function wireChrome() {
   if (backBtn) backBtn.addEventListener('click', () => history.back());
 
   for (const btn of document.querySelectorAll('.tabbar__item')) {
-    btn.addEventListener('click', () => ui.navigate(btn.dataset.screen));
+    btn.addEventListener('click', () => {
+      if (btn.dataset.screen === 'cases') openSimulator();
+      else ui.navigate(btn.dataset.screen);
+    });
   }
 }
 
@@ -87,7 +106,7 @@ function paintChrome(screen) {
 
   const title = document.getElementById('appbar-title');
   if (title && TAB_SCREENS.has(screen)) {
-    title.textContent = { home: 'PYQ', practice: 'Practice', tests: 'Grand Tests', review: 'Review', stats: 'Stats' }[screen];
+    title.textContent = { home: 'PYQ', practice: 'Practice', tests: 'Grand Tests', cases: 'Cases', review: 'Review', stats: 'Stats' }[screen] || 'PYQ';
   }
 }
 
@@ -177,6 +196,10 @@ async function routeTo(screen, params) {
     case 'analysis':
       gtRunning = false;
       return analysis.show(root, params);
+
+    case 'cases':
+      openSimulator();
+      return;
 
     case 'review':
       return review.show(root);

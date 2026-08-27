@@ -11,3 +11,6 @@ android/app/build/
 # re-includes only pyq-app/build, and not android/app/build above.
 !/build/
 !/build/*.py
+
+# Screenshots from the end-to-end run — regenerated on every test, not source.
+.shots/

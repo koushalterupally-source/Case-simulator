@@ -1,25 +1,35 @@
 #!/usr/bin/env bash
-# Assemble a deployable copy of the app: the source files plus the generated question data,
-# in the layout both GitHub Pages and the Android WebView wrapper expect.
+# Assemble the whole product — the PYQ app and the clinical case simulator — into one deployable
+# directory, sharing one origin, one navigation and one palette.
 #
 #   ./build/stage.sh <medqbank-assets-dir> <output-dir>
 #
-# Example, staging into a Medqbank checkout so the existing APK and Pages workflows pick it up:
+# Example:
 #   ./build/stage.sh /tmp/medqbank/android/app/src/main/assets ./dist
 #
-# The data is rebuilt from source every time rather than copied from a previous run, so a stage
-# can never ship a stale index.
+# Layout produced:
+#   <out>/              the PYQ app (practice, grand tests, review, stats)
+#   <out>/simulator/    the clinical case simulator, its own bundle and service worker
+#
+# SITE_BASE overrides the URL path the site is served from (default "/"). GitHub Pages project
+# sites live under /<repo>/, and the simulator's asset URLs are baked in at build time, so this
+# has to be right or the simulator loads a blank page.
+#
+# The question index is rebuilt from source every run, so a stage can never ship a stale index
+# against fresh code.
 
 set -euo pipefail
 
 if [ $# -ne 2 ]; then
-  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
   exit 64
 fi
 
 SRC_ASSETS="$1"
-OUT="$2"
-HERE="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
+APP="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$APP/.." && pwd)"
+SITE_BASE="${SITE_BASE:-/}"
 
 if [ ! -d "$SRC_ASSETS/pyq" ] || [ ! -d "$SRC_ASSETS/cereb" ]; then
   echo "error: $SRC_ASSETS does not look like the Medqbank assets directory" >&2
@@ -27,23 +37,32 @@ if [ ! -d "$SRC_ASSETS/pyq" ] || [ ! -d "$SRC_ASSETS/cereb" ]; then
   exit 66
 fi
 
-echo "==> Building the index"
-python3 "$HERE/build/build_index.py" --src "$SRC_ASSETS" --out "$HERE/data"
+echo "==> Building the question index"
+python3 "$APP/build/build_index.py" --src "$SRC_ASSETS" --out "$APP/data"
 
-echo "==> Verifying the index"
-python3 "$HERE/build/verify_index.py" --dir "$HERE/data"
+echo "==> Verifying the question index"
+python3 "$APP/build/verify_index.py" --dir "$APP/data"
 
-echo "==> Staging into $OUT"
+echo "==> Staging the PYQ app"
 rm -rf "$OUT"
 mkdir -p "$OUT"
-cp "$HERE/index.html" "$HERE/manifest.webmanifest" "$HERE/sw.js" "$OUT/"
-cp -r "$HERE/src" "$HERE/icons" "$HERE/data" "$OUT/"
+cp "$APP/index.html" "$APP/manifest.webmanifest" "$APP/sw.js" "$OUT/"
+cp -r "$APP/src" "$APP/icons" "$APP/data" "$OUT/"
 
-# Tests and scratch output are not part of a deployable build.
-rm -rf "$OUT/.shots"
+echo "==> Building the case simulator (base ${SITE_BASE}simulator/)"
+if [ ! -d "$REPO/node_modules" ]; then
+  echo "    installing dependencies"
+  (cd "$REPO" && npm ci --silent)
+fi
+(cd "$REPO" && VITE_BASE_PATH="${SITE_BASE}simulator/" npm run build --silent)
+
+echo "==> Staging the case simulator"
+mkdir -p "$OUT/simulator"
+cp -r "$REPO/dist/." "$OUT/simulator/"
 
 echo
 echo "Staged $(du -sh "$OUT" | cut -f1) into $OUT"
-echo "  files: $(find "$OUT" -type f | wc -l | tr -d ' ')"
+echo "  PYQ app:   $(find "$OUT" -maxdepth 1 -type f | wc -l | tr -d ' ') files at the root"
+echo "  simulator: $(find "$OUT/simulator" -type f | wc -l | tr -d ' ') files"
 echo
 echo "Serve it with:  python3 -m http.server 8000 --directory $OUT"

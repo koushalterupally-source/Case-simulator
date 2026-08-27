@@ -40,6 +40,7 @@ export async function show(root) {
         heroTile(unfinished),
         navCard('📚', 'Practice', 'Subject-wise and topic-wise question banks.', 'practice'),
         navCard('🎯', 'Tests', 'Full-length mock papers under exam conditions.', 'tests'),
+        navCard('🩺', 'Cases', 'Work a patient from presentation to diagnosis.', 'cases'),
         navCard('🧠', 'Review', 'Every mistake and bookmark, with the full explanation.', 'review'),
         navCard('📊', 'Stats', 'Accuracy by subject, test history, backups.', 'stats'),
       ]),
