@@ -61,7 +61,7 @@ if [ ! -d "$REPO/node_modules" ]; then
 fi
 SIM_TMP="$REPO/.sim-dist"
 rm -rf "$SIM_TMP"
-(cd "$REPO" && VITE_BASE_PATH="${SITE_BASE}simulator/" npx vite build --outDir "$SIM_TMP" --emptyOutDir --silent)
+(cd "$REPO" && VITE_BASE_PATH="${SITE_BASE}simulator/" npx vite build --outDir "$SIM_TMP" --emptyOutDir --logLevel error)
 
 echo "==> Staging the PYQ app"
 rm -rf "$OUT"
