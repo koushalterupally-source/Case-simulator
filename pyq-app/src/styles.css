@@ -1116,3 +1116,357 @@ main {
   color: var(--subtext);
   line-height: 1.45;
 }
+
+/* ==========================================================================
+   Marrow / Medical App UI System
+   ========================================================================== */
+
+/* Header & Streak */
+.marrow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-c);
+  border-radius: var(--radius);
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+.marrow-header__user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.marrow-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--accent-wash);
+  border: 1.5px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+}
+.marrow-user__title {
+  font-family: var(--f-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.marrow-user__sub {
+  font-size: 0.76rem;
+  color: var(--subtext);
+  font-weight: 500;
+}
+.marrow-streak-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--amber-wash);
+  border: 1px solid var(--amber);
+  border-radius: 999px;
+}
+.marrow-streak__flame { font-size: 1rem; }
+.marrow-streak__text {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+/* Marrow Module Cards */
+.grid--marrow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.grid--sub {
+  margin-top: -6px;
+  margin-bottom: 20px;
+}
+.marrow-card {
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-c);
+  border-radius: var(--radius);
+  padding: 22px 20px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+.marrow-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lift);
+  border-color: var(--accent);
+}
+.marrow-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.marrow-card__icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+.marrow-card__badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+}
+.badge--blue { background: rgba(37, 99, 235, 0.12); color: var(--accent); border: 1px solid rgba(37, 99, 235, 0.3); }
+.badge--purple { background: rgba(124, 58, 237, 0.12); color: var(--violet); border: 1px solid rgba(124, 58, 237, 0.3); }
+.badge--amber { background: var(--amber-wash); color: var(--amber); border: 1px solid rgba(217, 119, 6, 0.3); }
+.badge--emerald { background: var(--green-wash); color: var(--green); border: 1px solid rgba(22, 163, 74, 0.3); }
+.badge--cyan { background: rgba(6, 182, 212, 0.12); color: #0891b2; border: 1px solid rgba(6, 182, 212, 0.3); }
+.badge--rose { background: var(--red-wash); color: var(--red); border: 1px solid rgba(220, 38, 38, 0.3); }
+
+.marrow-card__title {
+  font-family: var(--f-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.marrow-card__sub {
+  font-size: 0.82rem;
+  color: var(--subtext);
+  line-height: 1.45;
+}
+.marrow-card--sub {
+  padding: 16px 20px;
+}
+
+/* Marrow Question Card & Meta */
+.qcard--marrow {
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-c);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+.qmeta--marrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+.qmeta__tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.qnum-badge {
+  font-family: var(--f-display);
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: 8px;
+  letter-spacing: 0.5px;
+}
+.chip--subject { background: var(--accent-wash); color: var(--accent); font-weight: 600; }
+.chip--exam { background: var(--amber-wash); color: var(--amber); font-weight: 600; }
+.chip--topic { background: var(--hairline); color: var(--subtext); }
+.bookmark-btn {
+  font-size: 1.3rem;
+  color: var(--subtext);
+  cursor: pointer;
+  transition: transform 0.2s var(--ease), color 0.2s var(--ease);
+}
+.bookmark-btn:hover { transform: scale(1.2); }
+.bookmark-btn--active { color: var(--amber) !important; text-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
+
+/* Marrow Options & Feedback */
+.options--marrow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 20px 0 10px;
+}
+.option--marrow {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--hairline);
+  background: var(--glass-solid);
+  color: var(--text);
+  font-size: 0.94rem;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  position: relative;
+}
+.option--marrow:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  transform: translateX(4px);
+}
+.option__key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--hairline);
+  font-weight: 700;
+  font-size: 0.82rem;
+  margin-right: 14px;
+  flex-shrink: 0;
+}
+.option__text {
+  flex: 1;
+}
+.option__status-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-left: 10px;
+  flex-shrink: 0;
+}
+.option__status-badge--correct {
+  background: var(--green);
+  color: #ffffff;
+}
+.option__status-badge--wrong {
+  background: var(--red);
+  color: #ffffff;
+}
+
+/* Post-Answer Marrow States */
+.option[data-state='correct'] {
+  background: var(--green-wash) !important;
+  border-color: var(--green) !important;
+  color: var(--text) !important;
+  box-shadow: 0 0 14px rgba(22, 163, 74, 0.2);
+}
+.option[data-state='correct'] .option__key {
+  background: var(--green);
+  color: #ffffff;
+}
+.option[data-state='wrong'] {
+  background: var(--red-wash) !important;
+  border-color: var(--red) !important;
+  color: var(--text) !important;
+}
+.option[data-state='wrong'] .option__key {
+  background: var(--red);
+  color: #ffffff;
+}
+
+/* Marrow Explanation & High-Yield Pearls */
+.explain--marrow {
+  margin-top: 24px;
+  padding: 20px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-solid);
+  border: 1px solid var(--border-c);
+  box-shadow: var(--shadow);
+}
+.explain-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.explain-banner--correct {
+  background: var(--green-wash);
+  border: 1.5px solid var(--green);
+  color: var(--text);
+}
+.explain-banner--wrong {
+  background: var(--amber-wash);
+  border: 1.5px solid var(--amber);
+  color: var(--text);
+}
+.explain-banner__icon { font-size: 1.4rem; }
+.explain-banner__sub { font-size: 0.85rem; color: var(--subtext); margin-top: 2px; }
+
+.marrow-pearl {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(251, 191, 36, 0.06));
+  border: 1.5px solid var(--amber);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+.marrow-pearl__head {
+  font-family: var(--f-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--amber);
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+.marrow-pearl__text {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.explain__body {
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.explain__body p { margin-bottom: 12px; }
+.explain__body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 0.85rem;
+}
+.explain__body th, .explain__body td {
+  padding: 8px 12px;
+  border: 1px solid var(--hairline);
+  text-align: left;
+}
+.explain__body th { background: var(--hairline); font-weight: 600; }
+
+.explain__footer-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+.chip--sm { font-size: 0.72rem; padding: 3px 8px; }
+.progress--marrow {
+  height: 4px;
+  background: var(--hairline);
+  border-radius: 2px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.progress--marrow .progress__fill {
+  background: linear-gradient(90deg, var(--accent), var(--violet));
+  height: 100%;
+  transition: width 0.3s var(--ease);
+}

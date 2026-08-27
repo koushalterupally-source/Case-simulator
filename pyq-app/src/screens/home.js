@@ -40,32 +40,57 @@ export async function show(root) {
   clear(root);
   setTitle(APP_NAME);
 
-  const [sessions, results, attempts, mistakes] = await Promise.all([
+  const [sessions, results, attempts, mistakes, bookmarks] = await Promise.all([
     safeGetAll('sessions'),
     safeGetAll('results'),
     safeGetAll('attempts'),
     safeGetAll('mistakes'),
+    safeGetAll('bookmarks'),
   ]);
 
   const unfinished = pickUnfinished(sessions);
 
   root.appendChild(
-    el('div', { class: 'screen' }, [
-      masthead(),
+    el('div', { class: 'screen screen--home' }, [
+      marrowUserHeader({ attempts, results }),
       quoteCard(),
-      statsStrip({ results, attempts, mistakes }),
-      el('div', { class: 'grid' }, [
-        heroTile(unfinished),
-        navCard('🎯', 'PYQ Papers', 'Previous year entrance exams (NEET-PG, INI-CET, AIIMS).', () => ui.navigate('practice', { source: 'PYQ' })),
-        navCard('🧠', 'CEREB Topics', 'Topic-wise coaching question banks across 19 subjects.', () => ui.navigate('practice', { source: 'CEREB' })),
-        navCard('🏹', 'ARROW High-Yield', 'Rapid-fire revision and high-yield concept questions.', () => ui.navigate('practice', { source: 'ARROW' })),
-        navCard('📝', 'Grand Tests', '165 full-length mock papers with timer & review flags.', () => ui.navigate('tests')),
-        navCard('🩺', 'Cases Simulator', 'Manage emergency admissions from vitals to discharge.', () => ui.navigate('cases')),
-        navCard('🔍', 'Review & Mistakes', 'Every flagged item and mistake with full rationale.', () => ui.navigate('review')),
-        navCard('📊', 'Stats & Backups', 'Subject-wise accuracy breakdown, test history & data export.', () => ui.navigate('stats')),
+      unfinished ? heroTile(unfinished) : null,
+      statsStrip({ results, attempts, mistakes, bookmarks }),
+      el('div', { class: 'section-title', text: 'Study Modules & Question Banks' }),
+      el('div', { class: 'grid grid--marrow' }, [
+        marrowCard('🎯', 'PYQ Exam Archive', 'Previous Year Questions (NEET-PG, INI-CET, AIIMS)', '4,692 Qs', 'badge--blue', () => ui.navigate('practice', { source: 'PYQ' })),
+        marrowCard('🧠', 'CEREB Topic QBank', 'Coaching question bank across 19 medical subjects', '44,601 Qs', 'badge--purple', () => ui.navigate('practice', { source: 'CEREB' })),
+        marrowCard('🏹', 'ARROW High-Yield', 'Rapid-fire recall & high-yield revision mode', 'Rapid Recall', 'badge--amber', () => ui.navigate('practice', { source: 'ARROW' })),
+        marrowCard('📝', 'Grand Tests (GTs)', '165 full-length mock papers under NBE exam conditions', '165 Tests', 'badge--emerald', () => ui.navigate('tests')),
+        marrowCard('🩺', 'Clinical Simulator', 'Emergency management with live vitals & ICU decisions', '12 Scenarios', 'badge--cyan', () => ui.navigate('cases')),
+        marrowCard('⭐', 'Pearls & Mistake Book', 'Review flagged pearls and revise all incorrect attempts', `${mistakes.length} Mistakes`, 'badge--rose', () => ui.navigate('review')),
       ]),
-    ])
+      el('div', { class: 'grid grid--sub' }, [
+        marrowSubCard('📊', 'Analytics & Subject Breakdown', 'Accuracy by discipline and score history', () => ui.navigate('stats')),
+      ]),
+    ].filter(Boolean))
   );
+}
+
+function marrowUserHeader({ attempts, results }) {
+  const totalAttempted = attempts.length + results.reduce((sum, r) => sum + (r.attempted || 0), 0);
+  const dailyTarget = 50;
+  const todayProgress = Math.min(dailyTarget, totalAttempted % dailyTarget);
+  const streakDays = Math.max(1, Math.min(30, Math.floor(totalAttempted / 20) + 1));
+
+  return el('div', { class: 'marrow-header' }, [
+    el('div', { class: 'marrow-header__user' }, [
+      el('div', { class: 'marrow-avatar', text: '🩺' }),
+      el('div', {}, [
+        el('div', { class: 'marrow-user__title', text: 'NEET-PG / INI-CET QBank' }),
+        el('div', { class: 'marrow-user__sub', text: 'All 19 Subjects · Offline Ready' }),
+      ]),
+    ]),
+    el('div', { class: 'marrow-streak-badge' }, [
+      el('span', { class: 'marrow-streak__flame', text: '🔥' }),
+      el('span', { class: 'marrow-streak__text', text: `${streakDays} Day Streak` }),
+    ]),
+  ]);
 }
 
 function setTitle(text) {
@@ -185,6 +210,28 @@ function heroTile(session) {
       el('div', { class: 'hero__icon', text: isGT ? '⏱️' : '📖' }),
     ]
   );
+}
+
+function marrowCard(icon, title, sub, badgeText, badgeClass, onClick) {
+  return el('button', { class: 'marrow-card', type: 'button', onclick: onClick }, [
+    el('div', { class: 'marrow-card__top' }, [
+      el('span', { class: 'marrow-card__icon', text: icon }),
+      el('span', { class: `marrow-card__badge ${badgeClass || ''}`, text: badgeText }),
+    ]),
+    el('div', { class: 'marrow-card__title', text: title }),
+    el('div', { class: 'marrow-card__sub', text: sub }),
+  ]);
+}
+
+function marrowSubCard(icon, title, sub, onClick) {
+  return el('button', { class: 'marrow-card marrow-card--sub', type: 'button', onclick: onClick }, [
+    el('div', { class: 'marrow-card__top' }, [
+      el('span', { class: 'marrow-card__icon', text: icon }),
+      el('span', { class: 'marrow-card__badge badge--cyan', text: 'Overview' }),
+    ]),
+    el('div', { class: 'marrow-card__title', text: title }),
+    el('div', { class: 'marrow-card__sub', text: sub }),
+  ]);
 }
 
 function navCard(icon, title, sub, onClickOrScreen) {

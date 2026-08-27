@@ -226,17 +226,23 @@ function render() {
 
   const options = el(
     'div',
-    { class: 'options', role: 'radiogroup', 'aria-label': 'Answer options' },
+    { class: 'options options--marrow', role: 'radiogroup', 'aria-label': 'Answer options' },
     q.options.map((text, i) => {
       let stateName = '';
+      let badgeLabel = '';
       if (answered) {
-        if (i === q.correct) stateName = 'correct';
-        else if (i === chosen) stateName = 'wrong';
+        if (i === q.correct) {
+          stateName = 'correct';
+          badgeLabel = '✓ Correct';
+        } else if (i === chosen) {
+          stateName = 'wrong';
+          badgeLabel = '✕ Your Choice';
+        }
       }
       return el(
         'button',
         {
-          class: 'option',
+          class: `option option--marrow ${answered ? 'option--answered' : ''}`,
           type: 'button',
           role: 'radio',
           'aria-checked': String(chosen === i),
@@ -244,33 +250,41 @@ function render() {
           dataset: { state: stateName },
           onclick: answered ? null : () => onAnswer(n, i),
         },
-        [el('span', { class: 'option__key', text: optionKey(i) }), el('span', { text })]
+        [
+          el('span', { class: 'option__key', text: optionKey(i) }),
+          el('span', { class: 'option__text', text }),
+          badgeLabel ? el('span', { class: `option__status-badge option__status-badge--${stateName}`, text: badgeLabel }) : null,
+        ]
       );
     })
   );
 
+  const metaPills = [
+    el('span', { class: 'qnum-badge', text: `Q ${n + 1} / ${session.count}` }),
+    q.subject ? el('span', { class: 'chip chip--subject', text: q.subject }) : null,
+    q.exam ? el('span', { class: 'chip chip--exam', text: `${q.exam}${q.year ? ' ' + q.year : ''}` }) : null,
+    q.subtopic ? el('span', { class: 'chip chip--topic', text: q.subtopic }) : null,
+  ].filter(Boolean);
+
   root.appendChild(
     el('div', { class: 'screen' }, [
-      el('div', { class: 'progress' }, [
+      el('div', { class: 'progress progress--marrow' }, [
         el('div', { class: 'progress__fill', style: { width: `${((n + 1) / session.count) * 100}%` } }),
       ]),
-      el('div', { class: 'qcard' }, [
-        el('div', { class: 'qmeta' }, [
-          el('strong', { text: `Q ${n + 1}` }),
-          el('span', { text: `of ${session.count}` }),
-          q.subject ? el('span', { class: 'chip', text: q.subject }) : null,
+      el('div', { class: 'qcard qcard--marrow' }, [
+        el('div', { class: 'qmeta qmeta--marrow' }, [
+          el('div', { class: 'qmeta__tags' }, metaPills),
           el('button', {
-            class: 'iconbtn',
+            class: `iconbtn bookmark-btn ${bookmarked ? 'bookmark-btn--active' : ''}`,
             type: 'button',
             'aria-label': bookmarked ? 'Remove bookmark' : 'Bookmark this question',
             text: bookmarked ? '★' : '☆',
-            style: { marginLeft: 'auto', color: bookmarked ? 'var(--amber)' : 'var(--subtext)' },
             onclick: () => toggleBookmark(q),
           }),
         ]),
         stem,
         options,
-        answered ? explainBlock(q) : null,
+        answered ? explainBlock(q, chosen) : null,
       ]),
     ])
   );
@@ -279,16 +293,55 @@ function render() {
   paintAppbar();
 }
 
-function explainBlock(q) {
+function explainBlock(q, chosen) {
+  const isCorrect = chosen === q.correct;
+  const correctLetter = optionKey(q.correct);
+  const correctText = q.options[q.correct] || '';
+
+  const answerBanner = el(
+    'div',
+    { class: `explain-banner ${isCorrect ? 'explain-banner--correct' : 'explain-banner--wrong'}` },
+    [
+      el('span', { class: 'explain-banner__icon', text: isCorrect ? '🎉' : '💡' }),
+      el('div', {}, [
+        el('strong', {
+          text: isCorrect
+            ? `Correct! Answer is (${correctLetter})`
+            : `Correct Answer is (${correctLetter})`,
+        }),
+        el('div', { class: 'explain-banner__sub', text: correctText }),
+      ]),
+    ]
+  );
+
+  const pearlBox = q.short ? el('div', { class: 'marrow-pearl' }, [
+    el('div', { class: 'marrow-pearl__head' }, [
+      el('span', { text: '⭐ HIGH-YIELD PEARL / KEY TAKEAWAY' }),
+    ]),
+    el('p', { class: 'marrow-pearl__text', text: q.short }),
+  ]) : null;
+
   if (q.hasExplanation) {
     const body = el('div', { class: 'explain__body' });
     html(body, q.detail);
-    return el('div', { class: 'explain' }, [el('div', { class: 'explain__head', text: 'Explanation' }), body]);
+    return el('div', { class: 'explain explain--marrow' }, [
+      answerBanner,
+      pearlBox,
+      el('div', { class: 'explain__head', text: '📖 Detailed Explanation' }),
+      body,
+      q.subject || q.subtopic ? el('div', { class: 'explain__footer-tags' }, [
+        q.subject ? el('span', { class: 'chip chip--sm', text: `Subject: ${q.subject}` }) : null,
+        q.subtopic ? el('span', { class: 'chip chip--sm', text: `Topic: ${q.subtopic}` }) : null,
+        q.exam ? el('span', { class: 'chip chip--sm', text: `Exam: ${q.exam} ${q.year || ''}` }) : null,
+      ].filter(Boolean)) : null,
+    ]);
   }
-  // 27% of the corpus has no real explanation. Say so rather than showing an empty panel.
-  return el('div', { class: 'explain explain--stub' }, [
-    el('div', { class: 'explain__head', text: 'No explanation in the source' }),
-    el('div', { text: q.short || `The answer is ${optionKey(q.correct)}.` }),
+
+  return el('div', { class: 'explain explain--stub explain--marrow' }, [
+    answerBanner,
+    pearlBox,
+    el('div', { class: 'explain__head', text: 'No further explanation in source' }),
+    el('div', { text: q.short || `The correct option is (${correctLetter}) ${correctText}.` }),
   ]);
 }
 
