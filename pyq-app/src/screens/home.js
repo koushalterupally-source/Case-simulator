@@ -238,7 +238,7 @@ function qodCard() {
   return card;
 }
 
-function statsStrip({ results, attempts, mistakes }) {
+function statsStrip({ results, attempts, mistakes, bookmarks }) {
   const gtAttempted = results.reduce((sum, r) => sum + (r.attempted || 0), 0);
   const gtCorrect = results.reduce((sum, r) => sum + (r.correct || 0), 0);
   const prAttempted = attempts.length;
@@ -253,7 +253,8 @@ function statsStrip({ results, attempts, mistakes }) {
     stat(pct(accuracy), 'Accuracy'),
     stat(results.length, 'Tests taken'),
     stat(mistakes.length, 'Mistakes'),
-  ]);
+    bookmarks ? stat(bookmarks.length, 'Bookmarks') : null,
+  ].filter(Boolean));
 }
 
 function stat(value, label) {

@@ -800,7 +800,10 @@ main {
   animation: slideup 0.28s var(--ease);
   box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
 }
-@keyframes slideup { from { transform: translateY(100%); } }
+@keyframes slideup {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .sheet__title { font-weight: 600; font-size: 1.08rem; margin-bottom: 4px; letter-spacing: -0.01em; }
 .sheet__sub { font-size: 0.85rem; color: var(--subtext); margin-bottom: 16px; }
 
@@ -1720,3 +1723,38 @@ main {
 .anki-btn--good { background: var(--green-wash); color: var(--green); border-color: var(--green); }
 .anki-btn--easy { background: rgba(37, 99, 235, 0.12); color: var(--accent); border-color: var(--accent); }
 
+/* Task 2 */
+.screen--home {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Task 4 */
+:root {
+  --amber-wash: rgba(245, 158, 11, 0.12);
+  --green-wash: rgba(22, 163, 74, 0.12);
+  --red-wash: rgba(220, 38, 38, 0.1);
+  --glass-solid: rgba(255,255,255,0.95);
+  --faint: #9ca3af;
+  --hairline: rgba(0,0,0,0.06);
+  --shadow-lift: 0 16px 48px rgba(31,38,135,0.14);
+}
+
+:root[data-theme='dark'] {
+  --glass-solid: rgba(30,41,59,0.95);
+  --faint: #475569;
+  --hairline: rgba(255,255,255,0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --glass-solid: rgba(30,41,59,0.95);
+    --faint: #475569;
+    --hairline: rgba(255,255,255,0.06);
+  }
+}
+
+/* Task 5 */
+.anki-card__side { display: block; }
+.anki-card--flipped .anki-card__front { display: none; }
+.anki-card:not(.anki-card--flipped) .anki-card__back { display: none; }
