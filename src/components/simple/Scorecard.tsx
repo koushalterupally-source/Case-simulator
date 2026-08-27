@@ -40,13 +40,13 @@ export const Scorecard: React.FC<ScorecardProps> = ({ session, onNewCase, onBack
           {session.patient.name} · {card.finalDiagnosis}
         </p>
 
-        {/* Headline numbers, plainly */}
+        {/* Headline numbers */}
         <div className="mt-7 flex flex-wrap gap-x-10 gap-y-4">
           {[
-            { v: `${stats.gatesCorrect}/${stats.gatesTotal}`, l: 'decisions right' },
-            { v: `${stats.accuracy}%`, l: 'accuracy' },
-            { v: `${stats.incidentalsCaught}/${stats.incidentalsTotal}`, l: 'incidentals caught' },
-            { v: `${stats.xp}`, l: 'XP' },
+            { v: `${session.completedOrders?.length || 0}`, l: 'orders completed' },
+            { v: `${stats.incidentalsCaught}/${stats.incidentalsTotal}`, l: 'incidentals managed' },
+            { v: `${card.overallScore}%`, l: 'clinical score' },
+            { v: `Grade ${card.overallGrade}`, l: 'competency' },
           ].map((s) => (
             <div key={s.l}>
               <div className="font-display text-[26px] font-semibold tnum leading-none">{s.v}</div>
@@ -58,53 +58,87 @@ export const Scorecard: React.FC<ScorecardProps> = ({ session, onNewCase, onBack
         </div>
 
         <div className="mt-8">
-          <Row label="The clinching clue">
-            {card.clinchingClue}
-            <span style={{ color: 'var(--text-faint)' }}> — available from {card.clinchingTime}</span>
-          </Row>
-
-          <Row label="Decisions">
-            <div className="space-y-2.5">
-              {card.gateResults.map((g) => (
-                <div key={g.qid} className="flex gap-3">
-                  <span
-                    className="shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full"
-                    style={{ background: g.isCorrect ? 'var(--ok)' : 'var(--danger)' }}
-                  />
-                  <div>
-                    <div>{g.concept}</div>
-                    <div className="text-[13px] tnum" style={{ color: 'var(--text-faint)' }}>
-                      {g.qid} · {g.examYear} · you chose {g.userChoice || 'none'}, answer {g.correctChoice}
-                    </div>
-                  </div>
-                </div>
-              ))}
+          <Row label="Final Diagnosis & Clinching Clue">
+            <div className="font-medium text-[16px] mb-1" style={{ color: 'var(--text)' }}>
+              {card.finalDiagnosis}
+            </div>
+            <div>
+              {card.clinchingClue}
+              {card.clinchingTime && (
+                <span style={{ color: 'var(--text-faint)' }}> — available from {card.clinchingTime}</span>
+              )}
             </div>
           </Row>
 
-          <Row label="Incidental findings">
-            <div className="space-y-2.5">
-              {card.incidentalFindingsReport.map((inc, i) => (
-                <div key={i} className="flex gap-3">
-                  <span
-                    className="shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full"
-                    style={{
-                      background:
-                        inc.status === 'noticed_addressed' ? 'var(--ok)' : 'var(--text-faint)',
-                    }}
-                  />
-                  <div>
-                    <div>{inc.title}</div>
-                    <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-                      {inc.outcome}
+          {card.criticalDelays.length > 0 && (
+            <Row label="Critical Delays / Misses">
+              <div className="space-y-2">
+                {card.criticalDelays.map((del, i) => (
+                  <div key={i} className="flex gap-2.5 text-[14px]" style={{ color: 'var(--danger)' }}>
+                    <span>⚠️</span>
+                    <span>{del}</span>
+                  </div>
+                ))}
+              </div>
+            </Row>
+          )}
+
+          {card.overOrderingList.length > 0 && (
+            <Row label="Unindicated Investigations">
+              <div className="space-y-1.5 text-[14px]" style={{ color: 'var(--text-muted)' }}>
+                {card.overOrderingList.map((ord, i) => (
+                  <div key={i}>• {ord}</div>
+                ))}
+              </div>
+            </Row>
+          )}
+
+          {card.gateResults.length > 0 && (
+            <Row label="Decisions">
+              <div className="space-y-2.5">
+                {card.gateResults.map((g) => (
+                  <div key={g.qid} className="flex gap-3">
+                    <span
+                      className="shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full"
+                      style={{ background: g.isCorrect ? 'var(--ok)' : 'var(--danger)' }}
+                    />
+                    <div>
+                      <div>{g.concept}</div>
+                      <div className="text-[13px] tnum" style={{ color: 'var(--text-faint)' }}>
+                        {g.qid} · {g.examYear} · you chose {g.userChoice || 'none'}, answer {g.correctChoice}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </Row>
+                ))}
+              </div>
+            </Row>
+          )}
 
-          {card.topConceptsToRevise.length > 0 && (
+          {card.incidentalFindingsReport.length > 0 && (
+            <Row label="Incidental findings">
+              <div className="space-y-2.5">
+                {card.incidentalFindingsReport.map((inc, i) => (
+                  <div key={i} className="flex gap-3">
+                    <span
+                      className="shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full"
+                      style={{
+                        background:
+                          inc.status === 'noticed_addressed' ? 'var(--ok)' : 'var(--text-faint)',
+                      }}
+                    />
+                    <div>
+                      <div>{inc.title}</div>
+                      <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+                        {inc.outcome}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Row>
+          )}
+
+          {card.topConceptsToRevise && card.topConceptsToRevise.length > 0 && (
             <Row label="Revise these">
               <ul className="space-y-1.5">
                 {card.topConceptsToRevise.map((c, i) => (

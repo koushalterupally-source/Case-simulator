@@ -487,8 +487,8 @@ export function generateScorecard(session: CaseSession): EndOfCaseScorecard {
   }));
 
   const correctGates = gateResults.filter((g) => g.isCorrect).length;
-  const totalGates = gateResults.length || 1;
-  const pyqPercentage = Math.round((correctGates / totalGates) * 100);
+  const totalGates = gateResults.length;
+  const pyqPercentage = totalGates > 0 ? Math.round((correctGates / totalGates) * 100) : 100;
 
   // Over-ordering list (orders placed that were not indicative)
   const allOrders = [...session.completedOrders, ...session.pendingOrders];
@@ -565,7 +565,8 @@ export function generateScorecard(session: CaseSession): EndOfCaseScorecard {
 
   // Calculate Overall Score for scaffold simulation
   const overOrderingPenalty = overOrders.length * 5;
-  const rawScore = Math.round((correctGates / totalGates) * 80 + addressedIncCount * 10 - overOrderingPenalty);
+  const gateContribution = totalGates > 0 ? (correctGates / totalGates) * 80 : 80;
+  const rawScore = Math.round(gateContribution + addressedIncCount * 10 - overOrderingPenalty);
   const overallScore = Math.min(100, Math.max(0, rawScore));
 
   let grade: 'S' | 'A' | 'B' | 'C' | 'F' = 'B';

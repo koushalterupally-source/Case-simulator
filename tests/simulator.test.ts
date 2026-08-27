@@ -102,12 +102,16 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
   ];
 
   // Pin the scaffold: gates now require the question to be topically about the
-  // patient's condition, so a STEMI question only binds into a STEMI case.
-  const session = buildCaseSessionFromScaffold(mockPyqs, { mode: 'standard', scaffoldId: 'scaffold_stemi' });
-  assert(session.decisionGates.length > 0, 'Decision gates bound from scaffolds & PYQ index');
+  // Pure clinical simulation by default: no question gate interruptions
+  const pureSession = buildCaseSessionFromScaffold(mockPyqs, { mode: 'standard', scaffoldId: 'scaffold_stemi' });
+  assert(pureSession.decisionGates.length === 0, 'Pure clinical simulation has no question gate interruptions');
+
+  // Gated mode verification with bindGates: true
+  const session = buildCaseSessionFromScaffold(mockPyqs, { mode: 'standard', scaffoldId: 'scaffold_stemi', bindGates: true });
+  assert(session.decisionGates.length > 0, 'Decision gates bound from scaffolds & PYQ index when requested');
 
   // And the inverse: an unrelated case must NOT bind this question at all.
-  const unrelated = buildCaseSessionFromScaffold(mockPyqs, { mode: 'standard', scaffoldId: 'scaffold_meningitis' });
+  const unrelated = buildCaseSessionFromScaffold(mockPyqs, { mode: 'standard', scaffoldId: 'scaffold_meningitis', bindGates: true });
   assert(unrelated.decisionGates.length === 0, 'A STEMI question does not bind into a meningitis case');
 
   // No case may present the same question twice.
@@ -124,7 +128,7 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
   assert(updatedSess.decisionGates[0].userAnswer === targetAnswer, 'User answer recorded against gate 0');
 
   // Test blind mode synonym matching
-  const blindSess = buildCaseSessionFromScaffold(mockPyqs, { mode: 'blind', scaffoldId: 'scaffold_stemi' });
+  const blindSess = buildCaseSessionFromScaffold(mockPyqs, { mode: 'blind', scaffoldId: 'scaffold_stemi', bindGates: true });
   const blindUpdated = processTurnOffline(blindSess, undefined, 'aspirin and plavix', 0);
   assert(blindUpdated.decisionGates[0].isCorrect === true, 'Blind mode synonym match "aspirin and plavix" graded correct');
 
@@ -332,7 +336,7 @@ Q2. A 30y/o female has hyperthyroidism. Which drug is preferred in 1st trimester
 
   // 8. Scorecard Generation & Grading
   console.log('\n--- Test Suite 8: Scorecard Generation & Grading ---');
-  const scoredSession = buildCaseSessionFromScaffold(DEFAULT_PYQ_INDEX, { scaffoldId: 'scaffold_stemi', mode: 'standard' });
+  const scoredSession = buildCaseSessionFromScaffold(DEFAULT_PYQ_INDEX, { scaffoldId: 'scaffold_stemi', mode: 'standard', bindGates: true });
   // Answer all gates correctly
   let fullSession = scoredSession;
   for (let g = 0; g < fullSession.decisionGates.length; g++) {

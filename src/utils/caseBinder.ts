@@ -99,6 +99,7 @@ export function buildCaseSessionFromScaffold(
     mode?: CaseMode;
     seed?: string;
     missedQIDs?: string[];
+    bindGates?: boolean;
   } = {}
 ): CaseSession {
   const seed = options.seed || `SEED-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -131,45 +132,30 @@ export function buildCaseSessionFromScaffold(
   // Weakness mode priority
   const missedQIDSet = new Set(options.missedQIDs || []);
 
-  // Bind PYQs to scaffold milestones
+  // Pure Clinical Simulation by default: No multiple-choice questions interrupting the case
   const decisionGates: DecisionGate[] = [];
-  const maxGates = mode === 'rapid' ? 3 : 5;
-  const usedQIDs = new Set<string>();
+  if (options.bindGates) {
+    const maxGates = mode === 'rapid' ? 3 : 5;
+    const usedQIDs = new Set<string>();
 
-  selectedScaffold.gateMilestones.forEach((milestone, idx) => {
-    if (decisionGates.length >= maxGates) return;
+    selectedScaffold.gateMilestones.forEach((milestone, idx) => {
+      if (decisionGates.length >= maxGates) return;
+      const scored = validPYQs
+        .filter((q) => !usedQIDs.has(q.qid))
+        .map((q) => ({ q, ...relevanceScore(q, selectedScaffold, milestone) }))
+        .filter((c) => c.condition >= MIN_CONDITION_MATCH);
 
-    // A gate must be ABOUT this patient. Previously any question could be bound
-    // to any milestone — a meningitis case asked about STEMI thrombolysis and
-    // post-splenectomy vaccination while the surrounding text insisted you were
-    // treating meningitis. Require a topical match, and if none exists leave the
-    // milestone unbound rather than inventing a connection.
-    const scored = validPYQs
-      // A question already used in this case must not appear again — repeating
-      // the same stem at five consecutive decisions is worse than having fewer.
-      .filter((q) => !usedQIDs.has(q.qid))
-      .map((q) => ({ q, ...relevanceScore(q, selectedScaffold, milestone) }))
-      .filter((c) => c.condition >= MIN_CONDITION_MATCH);
-
-    if (scored.length === 0) return;
-
-    // Prefer questions that also sit at the right point in the clinical arc.
-    const roleMatched = scored.filter((c) => c.q.roleTag === milestone.roleTag);
-    let pool = roleMatched.length > 0 ? roleMatched : scored;
-
-    if (mode === 'weakness' && pool.some((c) => missedQIDSet.has(c.q.qid))) {
-      pool = pool.filter((c) => missedQIDSet.has(c.q.qid));
-    }
-
-    // Among the relevant ones, favour the most relevant.
-    const best = Math.max(...pool.map((c) => c.total));
-    const top = pool.filter((c) => c.total >= best * 0.75);
-
-    {
+      if (scored.length === 0) return;
+      const roleMatched = scored.filter((c) => c.q.roleTag === milestone.roleTag);
+      let pool = roleMatched.length > 0 ? roleMatched : scored;
+      if (mode === 'weakness' && pool.some((c) => missedQIDSet.has(c.q.qid))) {
+        pool = pool.filter((c) => missedQIDSet.has(c.q.qid));
+      }
+      const best = Math.max(...pool.map((c) => c.total));
+      const top = pool.filter((c) => c.total >= best * 0.75);
       const chosenPYQ = top[Math.floor(prng() * top.length)].q;
       usedQIDs.add(chosenPYQ.qid);
 
-      // Shuffle options to prevent positional bias
       const { shuffledOptions, newCorrectAnswer } = shufflePYQOptions(
         chosenPYQ.options,
         chosenPYQ.correctAnswer,
@@ -185,12 +171,12 @@ export function buildCaseSessionFromScaffold(
       decisionGates.push({
         id: `gate_${idx + 1}`,
         pyq: boundPYQ,
-        triggerTurnIndex: (idx + 1) * 3, // Milestones trigger after turn progression
+        triggerTurnIndex: (idx + 1) * 3,
         patientContext: milestone.patientContext,
         consequenceMessage: '',
       });
-    }
-  });
+    });
+  }
 
   // Pick 2 Incidental Findings from scaffold pool
   const incidentalPool = [...selectedScaffold.incidentalPool];
