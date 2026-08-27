@@ -34,7 +34,39 @@ const DAILY_QUOTES = [
   { quote: 'Perseverance is not a long race; it is many short races one after the other.', author: 'Walter Elliot' },
 ];
 
+const DAILY_QUESTIONS = [
+  {
+    id: 'qod_01',
+    subject: 'Medicine',
+    exam: 'NEET-PG High Yield',
+    question: 'A 55-year-old male with a history of acute anterior MI presents 3 weeks later with sharp, pleuritic chest pain that worsens on lying supine and improves on leaning forward. Pericardial friction rub is heard. What is the most likely diagnosis?',
+    options: ['Dressler Syndrome (Post-MI Pericarditis)', 'Myocardial Reinfarction', 'Ventricular Free Wall Rupture', 'Acute Papillary Muscle Rupture'],
+    correct: 0,
+    pearl: 'Dressler syndrome is an autoimmune pericarditis developing 2 to 10 weeks post-MI. Treatment: High-dose Aspirin + Colchicine.',
+  },
+  {
+    id: 'qod_02',
+    subject: 'Pharmacology',
+    exam: 'INI-CET Recall',
+    question: 'Which of the following antimicrobial agents causes Gray Baby Syndrome due to deficient hepatic glucuronidation in neonates?',
+    options: ['Chloramphenicol', 'Ceftriaxone', 'Gentamicin', 'Tetracycline'],
+    correct: 0,
+    pearl: 'Chloramphenicol in neonates causes Gray Baby Syndrome due to immature UDP-glucuronyl transferase and reduced renal clearance.',
+  },
+  {
+    id: 'qod_03',
+    subject: 'Surgery',
+    exam: 'NEET-PG High Yield',
+    question: 'A 40-year-old female presents with multiple refractory peptic ulcers in the distal duodenum and fasting serum gastrin >1000 pg/mL. What is the investigation of choice for tumor localization?',
+    options: ['68Ga-DOTATATE PET-CT / Somatostatin Receptor Scintigraphy', 'Abdominal Ultrasound', 'Barium Meal Series', 'Diagnostic Laparoscopy'],
+    correct: 0,
+    pearl: 'Gastrinoma (Zollinger-Ellison Syndrome) most commonly arises in the Passaro Triangle. 68Ga-DOTATATE PET-CT is the gold standard localization study.',
+  },
+];
+
 let activeQuoteIndex = Math.floor((Date.now() / (1000 * 60 * 60 * 24)) % DAILY_QUOTES.length);
+let activeQodIndex = Math.floor((Date.now() / (1000 * 60 * 60 * 24)) % DAILY_QUESTIONS.length);
+let qodAnswerState = { answered: false, chosen: null };
 
 export async function show(root) {
   clear(root);
@@ -52,45 +84,36 @@ export async function show(root) {
 
   root.appendChild(
     el('div', { class: 'screen screen--home' }, [
-      marrowUserHeader({ attempts, results }),
+      // 1. Top Quote of the Day
       quoteCard(),
+
+      // 2. Question of the Day (QOD)
+      qodCard(),
+
+      // Resume Active Session (if any)
       unfinished ? heroTile(unfinished) : null,
-      statsStrip({ results, attempts, mistakes, bookmarks }),
-      el('div', { class: 'section-title', text: 'Study Modules & Question Banks' }),
+
+      // 3. Primary Navigation Options to the 5 Core Areas
+      el('div', { class: 'section-title', text: 'Navigation & Study Modes' }, []),
       el('div', { class: 'grid grid--marrow' }, [
-        marrowCard('🎯', 'PYQ Exam Archive', 'Previous Year Questions (NEET-PG, INI-CET, AIIMS)', '4,692 Qs', 'badge--blue', () => ui.navigate('practice', { source: 'PYQ' })),
-        marrowCard('🧠', 'CEREB Topic QBank', 'Coaching question bank across 19 medical subjects', '44,601 Qs', 'badge--purple', () => ui.navigate('practice', { source: 'CEREB' })),
-        marrowCard('🏹', 'ARROW High-Yield', 'Rapid-fire recall & high-yield revision mode', 'Rapid Recall', 'badge--amber', () => ui.navigate('practice', { source: 'ARROW' })),
-        marrowCard('📝', 'Grand Tests (GTs)', '165 full-length mock papers under NBE exam conditions', '165 Tests', 'badge--emerald', () => ui.navigate('tests')),
-        marrowCard('🩺', 'Clinical Simulator', 'Emergency management with live vitals & ICU decisions', '12 Scenarios', 'badge--cyan', () => ui.navigate('cases')),
-        marrowCard('⭐', 'Pearls & Mistake Book', 'Review flagged pearls and revise all incorrect attempts', `${mistakes.length} Mistakes`, 'badge--rose', () => ui.navigate('review')),
+        // 1) QBank (Arrow / Cereb / PYQs - Subject Wise)
+        marrowCard('📚', '1) QBank', 'ARROW / CEREB / PYQs with 19 Subject-Wise breakdowns', '49,293 Qs', 'badge--blue', () => ui.navigate('practice')),
+        // 2) Tests
+        marrowCard('📝', '2) Tests', '165 Full-Length Grand Tests under NBE exam conditions', '165 Tests', 'badge--emerald', () => ui.navigate('tests')),
+        // 3) Analytics
+        marrowCard('📊', '3) Analytics', 'Subject accuracy breakdown, speed metrics & mistake review', 'Diagnostics', 'badge--purple', () => ui.navigate('stats')),
+        // 4) Anki
+        marrowCard('📇', '4) Anki Flashcards', 'High-Yield Medical Spaced Repetition Decks & Pearls', 'Spaced Recall', 'badge--amber', () => ui.navigate('anki')),
+        // 5) Clinical Case Simulator
+        marrowCard('🩺', '5) Case Simulator', 'Emergency room case management with vitals & ICU decisions', 'Live Sim', 'badge--cyan', () => ui.navigate('cases')),
+        // Review Mistake Book
+        marrowCard('⭐', '6) Mistake Book', 'Instant revision for all bookmarked and incorrect attempts', `${mistakes.length} Mistakes`, 'badge--rose', () => ui.navigate('review')),
       ]),
-      el('div', { class: 'grid grid--sub' }, [
-        marrowSubCard('📊', 'Analytics & Subject Breakdown', 'Accuracy by discipline and score history', () => ui.navigate('stats')),
-      ]),
+
+      // Stats Summary Bar
+      statsStrip({ results, attempts, mistakes, bookmarks }),
     ].filter(Boolean))
   );
-}
-
-function marrowUserHeader({ attempts, results }) {
-  const totalAttempted = attempts.length + results.reduce((sum, r) => sum + (r.attempted || 0), 0);
-  const dailyTarget = 50;
-  const todayProgress = Math.min(dailyTarget, totalAttempted % dailyTarget);
-  const streakDays = Math.max(1, Math.min(30, Math.floor(totalAttempted / 20) + 1));
-
-  return el('div', { class: 'marrow-header' }, [
-    el('div', { class: 'marrow-header__user' }, [
-      el('div', { class: 'marrow-avatar', text: '🩺' }),
-      el('div', {}, [
-        el('div', { class: 'marrow-user__title', text: 'NEET-PG / INI-CET QBank' }),
-        el('div', { class: 'marrow-user__sub', text: 'All 19 Subjects · Offline Ready' }),
-      ]),
-    ]),
-    el('div', { class: 'marrow-streak-badge' }, [
-      el('span', { class: 'marrow-streak__flame', text: '🔥' }),
-      el('span', { class: 'marrow-streak__text', text: `${streakDays} Day Streak` }),
-    ]),
-  ]);
 }
 
 function setTitle(text) {
@@ -112,10 +135,6 @@ function pickUnfinished(sessions) {
   if (running.length === 0) return null;
   running.sort((a, b) => (b.updatedAt || b.startedAt || 0) - (a.updatedAt || a.startedAt || 0));
   return running[0];
-}
-
-function masthead() {
-  return el('div', { class: 'masthead' }, [el('h1', { text: APP_NAME }), el('p', { text: TAGLINE })]);
 }
 
 function quoteCard() {
@@ -144,6 +163,78 @@ function quoteCard() {
     quoteAuthor,
   ]);
 
+  return card;
+}
+
+function qodCard() {
+  const qod = DAILY_QUESTIONS[activeQodIndex % DAILY_QUESTIONS.length];
+  const card = el('div', { class: 'qod-card' });
+
+  function renderQod() {
+    clear(card);
+    card.appendChild(
+      el('div', { class: 'qod-card__header' }, [
+        el('div', { class: 'qod-card__title-row' }, [
+          el('span', { class: 'qod-card__badge', text: '⚡ QUESTION OF THE DAY' }),
+          el('span', { class: 'chip chip--subject', text: qod.subject }),
+          el('span', { class: 'chip chip--exam', text: qod.exam }),
+        ]),
+        el('button', {
+          class: 'quote-card__btn',
+          type: 'button',
+          title: 'Next Question',
+          onclick: (e) => {
+            e.stopPropagation();
+            activeQodIndex = (activeQodIndex + 1) % DAILY_QUESTIONS.length;
+            qodAnswerState = { answered: false, chosen: null };
+            renderQod();
+          },
+        }, [el('span', { text: '↻' })]),
+      ])
+    );
+
+    card.appendChild(el('div', { class: 'qod-card__stem', text: qod.question }));
+
+    const optionList = el('div', { class: 'qod-card__options' }, qod.options.map((opt, i) => {
+      let stateClass = '';
+      let badge = '';
+      if (qodAnswerState.answered) {
+        if (i === qod.correct) {
+          stateClass = 'option--correct';
+          badge = '✓ Correct';
+        } else if (i === qodAnswerState.chosen) {
+          stateClass = 'option--wrong';
+          badge = '✕ Your Choice';
+        }
+      }
+      return el('button', {
+        class: `qod-option ${stateClass}`,
+        type: 'button',
+        disabled: qodAnswerState.answered,
+        onclick: () => {
+          qodAnswerState = { answered: true, chosen: i };
+          renderQod();
+        },
+      }, [
+        el('span', { class: 'qod-option__key', text: String.fromCharCode(65 + i) }),
+        el('span', { class: 'qod-option__text', text: opt }),
+        badge ? el('span', { class: 'qod-option__badge', text: badge }) : null,
+      ]);
+    }));
+    card.appendChild(optionList);
+
+    if (qodAnswerState.answered) {
+      const isCorrect = qodAnswerState.chosen === qod.correct;
+      card.appendChild(
+        el('div', { class: `qod-feedback ${isCorrect ? 'qod-feedback--correct' : 'qod-feedback--wrong'}` }, [
+          el('div', { class: 'qod-feedback__head', text: isCorrect ? '🎉 Correct Answer!' : `💡 Correct Answer: (${String.fromCharCode(65 + qod.correct)}) ${qod.options[qod.correct]}` }),
+          el('div', { class: 'qod-feedback__pearl', text: `⭐ Key Pearl: ${qod.pearl}` }),
+        ])
+      );
+    }
+  }
+
+  renderQod();
   return card;
 }
 

@@ -36,6 +36,7 @@ const SHELL = [
   './src/screens/analysis.js',
   './src/screens/review.js',
   './src/screens/stats.js',
+  './src/screens/anki.js',
   './data/catalog.json',
 ];
 

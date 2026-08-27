@@ -18,6 +18,7 @@ import * as gtScreen from './screens/gt-screen.js';
 import * as analysis from './screens/analysis.js';
 import * as review from './screens/review.js';
 import * as stats from './screens/stats.js';
+import * as anki from './screens/anki.js';
 
 const TAB_SCREENS = new Set(['home', 'practice', 'tests', 'cases', 'stats']);
 
@@ -206,6 +207,9 @@ async function routeTo(screen, params) {
 
     case 'stats':
       return stats.show(root);
+
+    case 'anki':
+      return anki.show(root);
 
     default:
       return home.show(root);
