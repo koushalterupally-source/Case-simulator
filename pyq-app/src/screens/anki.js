@@ -81,16 +81,14 @@ export async function show(root) {
 
     if (currentCardIndex >= filteredDeck.length) {
       currentCardIndex = 0;
-    }
-
-    const card = filteredDeck[currentCardIndex];
+    }    const card = filteredDeck[currentCardIndex];
 
     const header = el('div', { class: 'anki-header' }, [
       el('div', {}, [
         el('div', { class: 'anki-header__title', text: '📇 Medical Spaced Repetition' }),
-        el('div', { class: 'anki-header__sub', text: ${filteredDeck.length} High-Yield Cards ·  Reviewed }),
+        el('div', { class: 'anki-header__sub', text: `${filteredDeck.length} High-Yield Cards · ${completedCount} Reviewed` }),
       ]),
-      el('div', { class: 'anki-badge', text: Card  /  }),
+      el('div', { class: 'anki-badge', text: `Card ${currentCardIndex + 1} / ${filteredDeck.length}` }),
     ]);
     container.appendChild(header);
 
@@ -99,7 +97,7 @@ export async function show(root) {
       el(
         'button',
         {
-          class: ilter-pill ,
+          class: `filter-pill ${selectedSubject === sub ? 'filter-pill--active' : ''}`,
           type: 'button',
           onclick: () => {
             selectedSubject = sub;
@@ -123,7 +121,7 @@ export async function show(root) {
     }
 
     const flashcard = el('div', {
-      class: nki-card ,
+      class: `anki-card ${isFlipped ? 'anki-card--flipped' : ''}`,
       onclick: () => {
         isFlipped = !isFlipped;
         renderView();

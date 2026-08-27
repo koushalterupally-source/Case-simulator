@@ -309,11 +309,9 @@ async function main() {
       else ok('no empty explanation panels');
     }
 
-    // ---- review and stats -------------------------------------------------
-    for (const screen of ['review', 'stats', 'home']) {
-      // Review no longer has a tab of its own — Cases took that slot — so reach it the way the
-      // Home card does. A reload here would wait on a networkidle the review screen, which
-      // streams shards to resolve its mistake bank, may never reach.
+    // ---- review, stats, anki and home -----------------------------------
+    for (const screen of ['review', 'stats', 'anki', 'home']) {
+      // Review and Cases are reached via Home cards or router hook; tabbar hosts home/practice/tests/anki/stats.
       const tab = await page.locator(`.tabbar__item[data-screen="${screen}"]`).count();
       if (tab > 0) await page.click(`.tabbar__item[data-screen="${screen}"]`);
       else await page.evaluate((s) => window.__pyqNav(s), screen);
@@ -332,12 +330,12 @@ async function main() {
     }
 
     // ---- the case simulator handoff ---------------------------------------
-    const casesTab = await page.locator('.tabbar__item[data-screen="cases"]').count();
-    if (casesTab === 0) bad('the Cases tab is present');
-    else ok('the Cases tab is present');
+    const ankiTab = await page.locator('.tabbar__item[data-screen="anki"]').count();
+    if (ankiTab === 0) bad('the Anki tab is present');
+    else ok('the Anki tab is present');
 
     if (existsSync(join(ROOT, 'simulator', 'index.html'))) {
-      await page.click('.tabbar__item[data-screen="cases"]');
+      await page.evaluate(() => window.__pyqNav('cases'));
       await page.waitForLoadState('load').catch(() => {});
       // The simulator fetches its whole 8,211-question index (17 subject files) on first boot and
       // caches it into IndexedDB. Tearing the page down mid-flight would abort those requests and
