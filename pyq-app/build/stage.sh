@@ -15,13 +15,21 @@
 # sites live under /<repo>/, and the simulator's asset URLs are baked in at build time, so this
 # has to be right or the simulator loads a blank page.
 #
+# ARROW_SRC (optional env var) points at a checkout of the THIRD PARTY
+# thesauceypotato/Medtrix-Android-Final repo's medical-mcq-engine/ directory. When set, it is
+# passed through to build_index.py as --arrow, adding Arrow as a third practice source built
+# from source every run -- same rule as the Medqbank corpus: never committed. Unset (the
+# default) leaves the build exactly as it is without Arrow; CI does not set it.
+#
+#   ARROW_SRC=/tmp/medtrix/medical-mcq-engine ./build/stage.sh /tmp/medqbank/.../assets ./dist
+#
 # The question index is rebuilt from source every run, so a stage can never ship a stale index
 # against fresh code.
 
 set -euo pipefail
 
 if [ $# -ne 2 ]; then
-  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'
   exit 64
 fi
 
@@ -49,7 +57,12 @@ if [ ! -d "$SRC_ASSETS/pyq" ] || [ ! -d "$SRC_ASSETS/cereb" ]; then
 fi
 
 echo "==> Building the question index"
-python3 "$APP/build/build_index.py" --src "$SRC_ASSETS" --out "$APP/data"
+ARROW_ARGS=()
+if [ -n "${ARROW_SRC:-}" ]; then
+  echo "    including Arrow from $ARROW_SRC"
+  ARROW_ARGS=(--arrow "$ARROW_SRC")
+fi
+python3 "$APP/build/build_index.py" --src "$SRC_ASSETS" --out "$APP/data" "${ARROW_ARGS[@]}"
 
 echo "==> Verifying the question index"
 python3 "$APP/build/verify_index.py" --dir "$APP/data"

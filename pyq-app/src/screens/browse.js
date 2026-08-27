@@ -188,9 +188,12 @@ export async function showPractice(root, params = {}) {
 }
 
 function sourceLabel(source) {
-  if (source === 'PYQ') return 'PYQ — Previous-Year Exam Papers';
-  if (source === 'CEREB') return 'CEREB — Topic-Wise Question Banks';
-  if (source === 'ARROW') return 'ARROW — Rapid High-Yield Practice Banks';
+  // Matched case-insensitively: the pipeline emits "Arrow" while the design system writes it
+  // "ARROW", and an exact match would silently fall through to the raw source string.
+  const key = String(source || '').toUpperCase();
+  if (key === 'PYQ') return 'PYQ — Previous-Year Exam Papers';
+  if (key === 'CEREB') return 'CEREB — Topic-Wise Question Banks';
+  if (key === 'ARROW') return 'ARROW — Chapter-Wise Question Bank';
   return source;
 }
 
@@ -209,12 +212,15 @@ function subjectRow(entry) {
   );
 }
 
-/** PYQ browses by exam session ("AIIMS 2017"); CEREB browses by topic ("Head, Neck and Face").
- * One flat "group" word for both would flatten a real distinction the workflow doc calls out. */
+/** PYQ browses by exam session ("AIIMS 2017"); CEREB browses by topic ("Head, Neck and Face");
+ * Arrow browses by syllabus chapter ("Airway Devices"). One flat "group" word for all three
+ * would flatten a real distinction the workflow doc calls out. Anything else falls back to the
+ * PYQ wording rather than silently mislabeling a group kind we don't know about. */
 function groupWords(source) {
-  return source === 'CEREB'
-    ? { singular: 'Topic', plural: 'topics' }
-    : { singular: 'Exam session', plural: 'exam sessions' };
+  const key = String(source || '').toUpperCase();
+  if (key === 'CEREB') return { singular: 'Topic', plural: 'topics' };
+  if (key === 'ARROW') return { singular: 'Chapter', plural: 'chapters' };
+  return { singular: 'Exam session', plural: 'exam sessions' };
 }
 
 /* -------------------------------------------------------------------- Practice: one subject */

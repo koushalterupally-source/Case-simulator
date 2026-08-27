@@ -8,11 +8,18 @@ sharded question/answer files described in pyq-app/ARCHITECTURE.md.
 Python 3, standard library only. No network access, no third-party imports.
 
 Usage:
-    python3 build_index.py --src <assets-dir> --out <out-dir>
+    python3 build_index.py --src <assets-dir> --out <out-dir> [--arrow <medical-mcq-engine-dir>]
 
 <assets-dir> must contain pyq/ and cereb/ subdirectories (each with a
 manifest.json and the bank JSON files), matching
 $MEDQBANK/android/app/src/main/assets.
+
+--arrow is optional. When given, it must point at a checkout of the THIRD PARTY
+thesauceypotato/Medtrix-Android-Final repo's medical-mcq-engine/ directory (i.e. the directory
+containing a data/ subfolder of per-subject question JSON files plus syllabus.json). Arrow data
+is built from that source tree every run and is never committed to this repo -- same rule as the
+Medqbank corpus. Omitting --arrow leaves the build byte-for-byte the same as before this source
+existed; CI does not pass it.
 """
 
 import argparse
@@ -63,6 +70,17 @@ MAX_SHARD_BYTES = 1_000_000     # split trigger: keep shards comfortably under 1
 HARD_LIMIT_BYTES = 1_048_576    # 1 MiB -- the actual hard limit we assert at the end
 
 MIN_EXPLANATION_CHARS = 60
+
+# --- Arrow (thesauceypotato/Medtrix-Android-Final, medical-mcq-engine/data/) ----------------
+# Third practice source, optional. Its per-record files/keys not covered elsewhere in this
+# module's constants.
+ARROW_NON_SUBJECT_FILES = {"master_index.json", "subjects.json", "syllabus.json"}
+# syllabus.json is keyed by subject name; a couple of subject spellings differ from the
+# `subject` field used inside the question records themselves. Chapter names are a cosmetic
+# grouping label, not identity, so a miss here just falls back to "Chapter N" -- it never
+# affects which subject a question is filed under.
+ARROW_SYLLABUS_ALT_SPELLING = {"Pediatrics": "Paediatrics"}
+ARROW_ID_CHAPTER_RE = re.compile(r"_Ch(\d+)_\d+$")
 
 # --- subject-classification tuning -----------------------------------------
 # Second pass is a multinomial Naive Bayes over unigrams+bigrams of
@@ -115,6 +133,22 @@ def strip_tags_text(s):
     if not s:
         return ""
     return html.unescape(TAG_RE.sub(" ", s)).strip()
+
+
+def wrap_plain_text_html(text):
+    """Arrow's `explanation` is plain text, unlike every other source's HTML `explanation.detail`.
+    Escape it and wrap it into <p>/<br> so it renders with the same paragraph/line structure as
+    the HTML-bearing sources once it goes through sanitize.js -- raw newlines in a plain string
+    dropped into innerHTML would otherwise collapse to one run-on line."""
+    text = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return ""
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()] or [text]
+    parts = []
+    for para in paragraphs:
+        lines = [html.escape(line) for line in para.split("\n")]
+        parts.append("<p>" + "<br>".join(lines) + "</p>")
+    return "".join(parts)
 
 
 def normalize_key(question_text):
@@ -259,6 +293,99 @@ def load_records(src_dir):
                 practice_records.append(rec)
 
     return practice_records, container_by_file
+
+
+def load_arrow_records(arrow_dir):
+    """Load every subject file under <arrow_dir>/data/, normalizing each record into the same
+    internal shape used for the PYQ/CEREB practice pool (question/options/correct/
+    explanation.detail/subject/subtopic) so it can be run through the exact same
+    dedup_practice() pass used for those banks.
+
+    `correct_option` is a lowercase letter in the source; converted to a 0-based index here.
+    A record whose letter does not land inside its OWN options list is a corrupt source record
+    -- it is excluded (never silently defaulted to index 0) and returned separately so the
+    caller can report it loudly. A wrong answer key is the worst possible bug in this app.
+
+    Returns (records, bad_letters) or None if arrow_dir does not look right.
+    """
+    data_dir = os.path.join(arrow_dir, "data")
+    if not os.path.isdir(data_dir):
+        print(f"error: {arrow_dir} does not contain a data/ directory "
+              f"(expected Medtrix's medical-mcq-engine/data)", file=sys.stderr)
+        return None
+
+    syllabus = {}
+    syllabus_path = os.path.join(data_dir, "syllabus.json")
+    if os.path.isfile(syllabus_path):
+        try:
+            syllabus = read_json(syllabus_path)
+        except (OSError, ValueError):
+            syllabus = {}
+
+    names = sorted(
+        n for n in os.listdir(data_dir)
+        if n.endswith(".json") and n not in ARROW_NON_SUBJECT_FILES
+    )
+
+    records = []
+    bad_letters = []
+    ref_counter = [0]
+
+    def next_ref():
+        ref_counter[0] += 1
+        return ref_counter[0]
+
+    for fn in names:
+        for rec in read_json(os.path.join(data_dir, fn)):
+            rid = rec["id"]
+            options = rec.get("options")
+            letter = rec.get("correct_option")
+
+            idx = None
+            if isinstance(letter, str) and len(letter) == 1 and isinstance(options, list):
+                cand = ord(letter.lower()) - ord("a")
+                if 0 <= cand < len(options):
+                    idx = cand
+
+            if idx is None:
+                bad_letters.append({
+                    "id": rid,
+                    "file": f"data/{fn}",
+                    "correctOption": letter,
+                    "optionsCount": len(options) if isinstance(options, list) else None,
+                })
+                print(
+                    f"ERROR: Arrow record {rid!r} ({fn}) has correct_option={letter!r}, out of "
+                    f"range for its {len(options) if isinstance(options, list) else '?'} "
+                    f"option(s) -- EXCLUDED from the build, not defaulted to option 0.",
+                    file=sys.stderr,
+                )
+                continue
+
+            subject = rec["subject"]
+            m = ARROW_ID_CHAPTER_RE.search(rid)
+            chapter_no = int(m.group(1)) if m else None
+            subtopic = None
+            if chapter_no is not None:
+                syl_subject = syllabus.get(subject) or syllabus.get(ARROW_SYLLABUS_ALT_SPELLING.get(subject, ""))
+                if isinstance(syl_subject, list) and 1 <= chapter_no <= len(syl_subject):
+                    subtopic = syl_subject[chapter_no - 1]
+            if not subtopic:
+                subtopic = f"Chapter {chapter_no}" if chapter_no is not None else "Uncategorized"
+
+            records.append({
+                "_ref": next_ref(),
+                "id": rid,
+                "question": rec["question_text"],
+                "options": options,
+                "correct": idx,
+                "explanation": {"short": "", "detail": wrap_plain_text_html(rec.get("explanation"))},
+                "subject": subject,
+                "subtopic": subtopic,
+                "images": rec.get("images") or [],
+            })
+
+    return records, bad_letters
 
 
 # --------------------------------------------------------------------------
@@ -580,6 +707,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--src", required=True, help="path to the medqbank assets dir (contains pyq/ and cereb/)")
     ap.add_argument("--out", required=True, help="output directory (wiped and regenerated)")
+    ap.add_argument("--arrow", default=None,
+                     help="optional path to a checkout of thesauceypotato/Medtrix-Android-Final's "
+                          "medical-mcq-engine/ dir; adds Arrow as a third practice source. Built "
+                          "from source every run and never committed. Omit for the default build.")
     args = ap.parse_args()
 
     src_dir = os.path.abspath(args.src)
@@ -587,6 +718,12 @@ def main():
 
     if not os.path.isdir(os.path.join(src_dir, "pyq")) or not os.path.isdir(os.path.join(src_dir, "cereb")):
         print(f"error: {src_dir} does not contain pyq/ and cereb/", file=sys.stderr)
+        return 1
+
+    arrow_dir = os.path.abspath(args.arrow) if args.arrow else None
+    if arrow_dir and not os.path.isdir(os.path.join(arrow_dir, "data")):
+        print(f"error: {arrow_dir} does not contain a data/ directory "
+              f"(expected Medtrix's medical-mcq-engine/data)", file=sys.stderr)
         return 1
 
     # ---- wipe & recreate output dir --------------------------------------
@@ -717,6 +854,111 @@ def main():
             "groups": groups_out,
         })
         practice_total_questions += subject_total
+
+    # ==========================================================================
+    # ARROW -- optional third practice source (thesauceypotato/Medtrix-Android-Final).
+    # Built from source every run, never committed (see README.md). Additive only: none of
+    # the above is touched, and when --arrow is omitted nothing in this block runs.
+    # ==========================================================================
+    arrow_needs_image = 0
+    if arrow_dir:
+        loaded = load_arrow_records(arrow_dir)
+        if loaded is None:
+            return 1
+        arrow_records, arrow_bad_letters = loaded
+        arrow_source_total = len(arrow_records) + len(arrow_bad_letters)
+
+        if arrow_bad_letters:
+            print(
+                f"WARNING: {len(arrow_bad_letters)} Arrow record(s) had a correct_option letter "
+                f"outside their own options range (see report.json arrow.correctOptionOutOfRange) "
+                f"-- excluded rather than guessed at.",
+                file=sys.stderr,
+            )
+
+        # Same dedup treatment as the other PRACTICE banks -- not the paper rule.
+        arrow_kept_refs, _arrow_key_to_kept, arrow_canon_changes, arrow_dup_removed = dedup_practice(arrow_records)
+        arrow_surviving = [r for r in arrow_records if r["_ref"] in arrow_kept_refs]
+
+        arrow_groups = OrderedDict()  # canonSubject -> OrderedDict(subtopic -> [records])
+        for rec in arrow_surviving:
+            arrow_groups.setdefault(rec["_canonSubject"], OrderedDict())
+            arrow_groups[rec["_canonSubject"]].setdefault(rec["subtopic"], [])
+            arrow_groups[rec["_canonSubject"]][rec["subtopic"]].append(rec)
+
+        for subject in sorted(arrow_groups.keys()):
+            subtopics = arrow_groups[subject]
+            slug = f"arrow-{slugify(subject)}"
+            groups_out = []
+            subject_total = 0
+
+            for subtopic_idx, (subtopic_name, recs) in enumerate(subtopics.items()):
+                pairs = []
+                for n, rec in enumerate(recs):
+                    needs_img = bool(rec.get("images")) or has_remote_image(rec["question"])
+                    if needs_img:
+                        arrow_needs_image += 1
+                    q_item = {
+                        "id": rec["id"],
+                        "n": n,
+                        "question": rec["question"],
+                        "options": rec["options"],
+                        "subject": rec["_canonSubject"],
+                        "subjectFrom": "source",
+                        "needsImage": needs_img,
+                    }
+                    detail = rec["explanation"]["detail"]
+                    has_expl = len(strip_tags_text(detail)) >= MIN_EXPLANATION_CHARS
+                    a_item = {
+                        "id": rec["id"],
+                        "correct": rec["correct"],
+                        "short": rec["explanation"]["short"],
+                        "detail": detail,
+                        "hasExplanation": has_expl,
+                    }
+                    pairs.append((q_item, a_item))
+
+                group_id_prefix = f"{slug}-{subtopic_idx}"
+                shard_ids, max_bytes = write_shards(pairs, shards_dir, group_id_prefix)
+                max_shard_bytes_seen = max(max_shard_bytes_seen, max_bytes)
+                assert len(shard_ids) == 1, (
+                    f"arrow group {slug}/{subtopic_name} needed {len(shard_ids)} shards; "
+                    "the catalog schema assumes practice groups fit in one shard"
+                )
+                groups_out.append({
+                    "name": subtopic_name,
+                    "count": len(recs),
+                    "shard": shard_ids[0],
+                })
+                subject_total += len(recs)
+
+            practice_catalog.append({
+                "source": "Arrow",
+                "subject": subject,
+                "slug": slug,
+                "total": subject_total,
+                "groups": groups_out,
+            })
+            practice_total_questions += subject_total
+
+        dropped_count += len(arrow_bad_letters) + arrow_dup_removed
+        source_total += arrow_source_total
+        report["sourceTotalQuestions"] = source_total
+        report["arrow"] = {
+            "sourceTotalQuestions": arrow_source_total,
+            "recordsAfterDedup": len(arrow_surviving),
+            "correctOptionOutOfRange": {
+                "count": len(arrow_bad_letters),
+                "records": arrow_bad_letters,
+            },
+            "subjectCanonicalization": arrow_canon_changes,
+            "dedup": {
+                "recordsBeforeDedup": len(arrow_records),
+                "recordsAfterDedup": len(arrow_kept_refs),
+                "duplicatesRemoved": arrow_dup_removed,
+            },
+            "needsImage": arrow_needs_image,
+        }
 
     # ==========================================================================
     # PAPERS catalog + shards
@@ -858,7 +1100,8 @@ def main():
     report["needsImage"] = {
         "practice": practice_needs_image,
         "papers": papers_needs_image,
-        "total": practice_needs_image + papers_needs_image,
+        "arrow": arrow_needs_image,
+        "total": practice_needs_image + papers_needs_image + arrow_needs_image,
     }
 
     # ---- totals & sanity invariant ------------------------------------------
@@ -913,6 +1156,11 @@ def main():
     print(f"  practice (post-dedup): {practice_total_questions}  papers: {papers_total_questions}  dropped: {dropped_count}")
     print(f"  grand_tests.json containment: {gt_report.get('contained')}")
     print(f"  classification: exact={container_exact} bayes={container_bayes} unclassified={container_unclassified} of {container_total}")
+    if arrow_dir:
+        arrow_rep = report["arrow"]
+        print(f"  arrow: source={arrow_rep['sourceTotalQuestions']} kept={arrow_rep['recordsAfterDedup']} "
+              f"dupRemoved={arrow_rep['dedup']['duplicatesRemoved']} "
+              f"badCorrectOption={arrow_rep['correctOptionOutOfRange']['count']}")
     print(f"  largest shard: {largest} bytes ({largest_file})")
     return 0
 
