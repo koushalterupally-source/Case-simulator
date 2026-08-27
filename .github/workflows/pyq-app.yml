@@ -1,0 +1,69 @@
+name: PYQ app
+
+on:
+  push:
+    paths:
+      - 'pyq-app/**'
+      - '.github/workflows/pyq-app.yml'
+  pull_request:
+    paths:
+      - 'pyq-app/**'
+      - '.github/workflows/pyq-app.yml'
+  workflow_dispatch:
+
+jobs:
+  unit:
+    name: Engine and sanitizer tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Node's own test runner; the app has no dependencies and no build step.
+      - run: node --test
+        working-directory: pyq-app
+
+  pipeline:
+    name: Data pipeline and end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The question bank lives in a separate repository and is never vendored here.
+      - name: Fetch the question bank
+        run: git clone --depth 1 https://github.com/koushalterupally-source/Medqbank /tmp/medqbank
+
+      - name: Build the index
+        working-directory: pyq-app
+        run: python3 build/build_index.py --src /tmp/medqbank/android/app/src/main/assets --out data
+
+      - name: Verify the index
+        working-directory: pyq-app
+        run: python3 build/verify_index.py --dir data
+
+      - name: Install Chromium
+        run: npx --yes playwright@1.56.1 install --with-deps chromium
+
+      - name: End-to-end smoke test
+        working-directory: pyq-app
+        env:
+          PYQ_CHROMIUM: ''
+        run: node tests/smoke.mjs
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyq-app-screens
+          path: pyq-app/.shots
+          retention-days: 14
+          if-no-files-found: ignore

@@ -15,7 +15,23 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PW = '/opt/node22/lib/node_modules/playwright/index.js';
+
+/**
+ * The app has no package.json by design, so Playwright is never a local dependency. Resolve it from
+ * wherever it happens to live: a normal install in CI, or the global one this sandbox provides.
+ */
+async function importPlaywright() {
+  const candidates = ['playwright', '/opt/node22/lib/node_modules/playwright/index.js'];
+  const errors = [];
+  for (const spec of candidates) {
+    try {
+      return await import(spec);
+    } catch (err) {
+      errors.push(`${spec}: ${err.message}`);
+    }
+  }
+  throw new Error(`Could not load Playwright.\n  ${errors.join('\n  ')}`);
+}
 
 const args = process.argv.slice(2);
 const HEADED = args.includes('--headed');
@@ -69,15 +85,18 @@ async function main() {
     process.exit(2);
   }
 
-  const { chromium } = await import(PW);
+  const { chromium } = await importPlaywright();
   const server = await serve();
   const base = `http://127.0.0.1:${server.address().port}`;
   await mkdir(SHOT_DIR, { recursive: true });
 
-  const browser = await chromium.launch({
-    headless: !HEADED,
-    executablePath: '/opt/pw-browsers/chromium/chrome-linux/chrome',
-  });
+  // Prefer a preinstalled browser when one is present (this sandbox ships one and blocks downloads);
+  // otherwise let Playwright resolve its own, which is what CI does.
+  const launchOpts = { headless: !HEADED };
+  const preinstalled = process.env.PYQ_CHROMIUM || '/opt/pw-browsers/chromium';
+  if (preinstalled && existsSync(preinstalled)) launchOpts.executablePath = preinstalled;
+
+  const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 2,
