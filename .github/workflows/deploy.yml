@@ -24,20 +24,36 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - run: npm ci
+      # The case simulator now lives in its own repository; stage.sh clones it. These steps
+      # remain only for a checkout that still carries it, and skip otherwise rather than
+      # failing the deploy on a file that is deliberately gone.
+      - name: Is the case simulator still in this repo?
+        id: sim
+        run: |
+          if [ -f package.json ] && [ -f vite.config.ts ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.sim.outputs.present == 'true'
+        run: npm ci
 
       - name: Typecheck case simulator
+        if: steps.sim.outputs.present == 'true'
         run: npm run lint
 
       - name: Test case simulator
+        if: steps.sim.outputs.present == 'true'
         run: npm test
 
+      # The PYQ app has no dependencies and no build step.
       - name: Engine and sanitizer unit tests
         working-directory: pyq-app
         run: node --test
