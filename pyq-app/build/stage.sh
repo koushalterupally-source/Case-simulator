@@ -23,6 +23,10 @@
 #
 #   ARROW_SRC=/tmp/medtrix/medical-mcq-engine ./build/stage.sh /tmp/medqbank/.../assets ./dist
 #
+# SIMULATOR_SRC / SIMULATOR_REPO control where the clinical case simulator comes from. It lives
+# in its own repository now; if this checkout still contains it the build uses that, otherwise it
+# clones SIMULATOR_REPO. Point SIMULATOR_SRC at a checkout to skip the clone.
+#
 # The question index is rebuilt from source every run, so a stage can never ship a stale index
 # against fresh code.
 
@@ -68,13 +72,38 @@ echo "==> Verifying the question index"
 python3 "$APP/build/verify_index.py" --dir "$APP/data"
 
 echo "==> Building the case simulator (base ${SITE_BASE}simulator/)"
-if [ ! -d "$REPO/node_modules" ]; then
-  echo "    installing dependencies"
-  (cd "$REPO" && npm ci --silent)
+
+# The simulator lives in its own repository. When this checkout still carries it (a package.json
+# beside a src/ that Vite can build), build it in place; otherwise clone it. SIMULATOR_SRC points
+# at an existing checkout, which is what CI and a local iteration loop want — cloning 40 MB on
+# every build is waste.
+SIM_REPO="${SIMULATOR_REPO:-https://github.com/koushalterupally-source/clinical-case-simulator}"
+SIM_DIR="${SIMULATOR_SRC:-}"
+
+if [ -z "$SIM_DIR" ] && [ -f "$REPO/package.json" ] && [ -f "$REPO/vite.config.ts" ]; then
+  SIM_DIR="$REPO"
+  echo "    building from this checkout"
+elif [ -z "$SIM_DIR" ]; then
+  SIM_DIR="$(mktemp -d)/clinical-case-simulator"
+  echo "    cloning $SIM_REPO"
+  git clone --depth 1 "$SIM_REPO" "$SIM_DIR"
+else
+  echo "    building from $SIM_DIR"
 fi
-SIM_TMP="$REPO/.sim-dist"
+
+if [ ! -f "$SIM_DIR/package.json" ]; then
+  echo "error: no case simulator at $SIM_DIR" >&2
+  echo "       set SIMULATOR_SRC to a checkout, or SIMULATOR_REPO to clone from" >&2
+  exit 66
+fi
+
+if [ ! -d "$SIM_DIR/node_modules" ]; then
+  echo "    installing dependencies"
+  (cd "$SIM_DIR" && npm ci --silent)
+fi
+SIM_TMP="$SIM_DIR/.sim-dist"
 rm -rf "$SIM_TMP"
-(cd "$REPO" && VITE_BASE_PATH="${SITE_BASE}simulator/" npx vite build --outDir "$SIM_TMP" --emptyOutDir --logLevel error)
+(cd "$SIM_DIR" && VITE_BASE_PATH="${SITE_BASE}simulator/" npx vite build --outDir "$SIM_TMP" --emptyOutDir --logLevel error)
 
 echo "==> Staging the PYQ app"
 rm -rf "$OUT"

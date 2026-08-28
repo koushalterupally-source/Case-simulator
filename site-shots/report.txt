@@ -24,13 +24,15 @@
   ok   review screen renders without error
   ok   stats screen renders
   ok   stats screen renders without error
+  ok   anki screen renders
+  ok   anki screen renders without error
   ok   home screen renders
   ok   home screen renders without error
-  ok   the Cases tab is present
+  ok   the Anki tab is present
   ok   Cases opens the simulator
   ok   simulator renders content
-  ok   simulator honours the shared theme (system)
+  ok   simulator honours the shared theme (light)
   ok   simulator offers a way back to PYQ
   ok   no same-origin request failed
-  note 6 external request(s) unreachable (fonts / remote images) — expected offline
+  note 7 external request(s) unreachable (fonts / remote images) — expected offline
   ok   no console errors
