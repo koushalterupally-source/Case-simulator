@@ -15,7 +15,9 @@
 // This module owns persistence only. It must never touch the DOM.
 
 const DB_NAME = 'PyqAppDB';
-const DB_VERSION = 1;
+// v2 adds `srs` (spaced-repetition card state, see srs.js) and `ankiProgress`. The upgrade loop
+// below creates whatever is missing without touching existing stores, so the bump is additive.
+const DB_VERSION = 2;
 
 const STORE_SCHEMA = {
   sessions: { keyPath: 'id', indexes: [] },
@@ -31,6 +33,13 @@ const STORE_SCHEMA = {
   },
   bookmarks: { keyPath: 'questionId', indexes: [] },
   mistakes: { keyPath: 'questionId', indexes: [{ name: 'subject', keyPath: 'subject' }] },
+  // Spaced-repetition card state. Indexed on `due` so a due count can be read without pulling
+  // every card into memory.
+  srs: { keyPath: 'questionId', indexes: [{ name: 'due', keyPath: 'due' }] },
+  // The Anki screen's review counter. It was already being read and written before this store
+  // existed, which meant every access rejected with "unknown object store" straight into a
+  // swallowing catch — the count looked like it saved and never did.
+  ankiProgress: { keyPath: 'id', indexes: [] },
   meta: { keyPath: 'key', indexes: [] },
 };
 

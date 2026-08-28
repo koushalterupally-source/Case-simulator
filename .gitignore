@@ -10,3 +10,6 @@ coverage/
 # Unified staged site produced by pyq-app/build/stage.sh
 site/
 .sim-dist/
+
+# Screenshots from the end-to-end run against a staged site — regenerated, not source.
+site-shots/

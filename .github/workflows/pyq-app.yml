@@ -37,15 +37,30 @@ jobs:
           node-version: 22
           cache: npm
 
+      # The case simulator is moving to its own repository. While it is still here, test it;
+      # once it leaves, these steps skip rather than fail the run.
+      - name: Is the case simulator still in this repo?
+        id: sim
+        run: |
+          if [ -f package.json ] && [ -f vite.config.ts ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install dependencies
+        if: steps.sim.outputs.present == 'true'
         run: npm ci
 
       - name: Typecheck case simulator
+        if: steps.sim.outputs.present == 'true'
         run: npm run lint
 
       - name: Test case simulator
+        if: steps.sim.outputs.present == 'true'
         run: npm test
 
+      # The PYQ app has no dependencies and no build step — Node's own test runner is enough.
       - name: Engine and sanitizer unit tests
         working-directory: pyq-app
         run: node --test
@@ -66,12 +81,15 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
+        if: hashFiles('package.json') != ''
         run: npm ci
 
-      # The question bank lives in a separate repository and is never vendored here.
+      # Neither the question bank nor the case simulator is vendored here; both are cloned.
       - name: Fetch the question bank
         run: git clone --depth 1 https://github.com/koushalterupally-source/Medqbank /tmp/medqbank
 
+      # stage.sh finds the simulator in this checkout while it is still here, and falls back to
+      # cloning once it has moved. Passing SIMULATOR_SRC when we already have it avoids the clone.
       - name: Build and stage unified product
         run: bash pyq-app/build/stage.sh /tmp/medqbank/android/app/src/main/assets dist
 

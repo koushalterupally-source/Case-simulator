@@ -31,6 +31,42 @@ python3 build/verify_index.py --dir data
 `verify_index.py` exits non-zero if anything is inconsistent — a dangling shard reference, a `.q.json`
 without its matching `.a.json`, a file over 1 MB, an out-of-range answer index. Run it after every build.
 
+### Arrow (optional third practice source)
+
+Arrow is the question bank behind Medtrix's `medical-mcq-engine` — 19 subjects, ~16,400 questions,
+already tagged with real subjects (no Naive Bayes guessing needed). It lives in a **third party's**
+public repo, [`thesauceypotato/Medtrix-Android-Final`](https://github.com/thesauceypotato/Medtrix-Android-Final)
+— not this account's, not the Medqbank corpus's. Exactly like Medqbank, its data is built from source at
+build time and **is never committed to this repo**. That is deliberate: whether it may be redistributed
+is not a question this repo should answer by quietly vendoring 20 MB of someone else's data.
+
+Building it in is opt-in — pass `--arrow`:
+
+```bash
+git clone --depth 1 https://github.com/thesauceypotato/Medtrix-Android-Final /tmp/medtrix
+
+python3 build/build_index.py \
+  --src /tmp/medqbank/android/app/src/main/assets \
+  --arrow /tmp/medtrix/medical-mcq-engine \
+  --out data
+
+python3 build/verify_index.py --dir data
+```
+
+(`/tmp/medtrix` also carries ~700 MB of question images under `medical-mcq-engine/data/images/` —
+untouched by the build; the app works fully offline without them, same as the Medqbank corpus's own
+remote images.)
+
+Omitting `--arrow` leaves the build byte-for-byte the same as without this source — that's what CI
+runs. `build/stage.sh` takes the same option as the optional `ARROW_SRC` environment variable.
+
+Two things Arrow needed handling for that Medqbank didn't. Its `correct_option` is a letter, not an
+index, so it is converted rather than assumed — and a record whose letter names an option that does
+not exist in its own options list is **excluded and reported loudly** in `report.json`
+(`arrow.correctOptionOutOfRange`) rather than silently defaulted to option 0, because a wrong answer
+key is the worst possible bug here. Its explanations are plain text rather than HTML, so they are
+escaped and wrapped in paragraphs at build time to render consistently with the other sources.
+
 ## Running it
 
 ```bash

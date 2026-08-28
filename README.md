@@ -1,47 +1,51 @@
-# Medtrix PYQ CCS Engine & Clinical Simulator
+# PYQ
 
-An offline-first, deterministic clinical case simulation platform designed for medical education (USMLE Step 3 CCS & INI-CET Clinical Reasoning).
+An offline-first question-bank app for Indian PG medical entrance prep — NEET-PG, INI-CET, AIIMS.
 
-## Features
+Three ways to study, over one data layer:
 
-- **Offline-First PWA Architecture**: Built with Service Workers (`public/sw.js`) and Web Application Manifest (`public/manifest.webmanifest`) to run completely offline without server dependencies.
-- **PYQ Index Engine**: Parses and manages thousands of Previous Year Questions (NEET-PG, INI-CET, USMLE) with automatic subject/system categorizations, role tags (`EMERGENCY`, `DIAGNOSIS`, `INVESTIGATION`, `MANAGEMENT`, `PHARM`), and draft flag handling for missing answer sources.
-- **Clinical Simulation Loop (`ccsEngine.ts`)**:
-  - Deterministic turn-based clock arithmetic supporting multi-day timelines past Day 10.
-  - Realistic order turnaround times (e.g. STAT ECG vs outpatient echo) and result delivery.
-  - Dynamic patient vitals deterioration if critical interventions are omitted beyond target milestones.
-- **Decision Gate Binding**:
-  - Binds clinical decision milestones to real PYQs.
-  - Standard Mode (MCQ) & Blind Mode (free-text commitment with clinical synonym matching and self-review fallbacks).
-  - Strict answer leak prevention: uncommitted gates hide concept answers and future gates are locked.
-- **USMLE/INI-CET Scorecard**:
-  - Evaluates decision gate accuracy, incidental actionable findings, over-ordering penalties, and critical delays.
-  - Clamped score output (0–100) with explicit mathematical formula display.
-- **Runtime Error Shield**: Built-in React `ErrorBoundary` prevents application white-screening during runtime edge cases, allowing session recovery or restart.
+- **QBank** — browse by subject, then by exam session (PYQ), topic (CEREB) or chapter (Arrow), with
+  the explanation revealed the moment you answer.
+- **Grand Tests** — sit one of 165 full-length mock papers under exam conditions: countdown, question
+  palette, mark-for-review, no feedback until you submit. Then a real analysis — score, subject-wise
+  accuracy, time per question, and every question reviewable with its full explanation.
+- **Anki** — spaced repetition over a curated high-yield deck and over your own mistakes and
+  bookmarks, scheduled by SM-2.
 
-## Getting Started
+No server, no login, no API key. It works in airplane mode.
 
-### Development
+The app lives in [`pyq-app/`](pyq-app/) — see its README for building, testing and the data pipeline,
+and `pyq-app/ARCHITECTURE.md` for the decisions that are not obvious.
+
+## The clinical case simulator
+
+The simulator moved to its own repository:
+**[koushalterupally-source/clinical-case-simulator](https://github.com/koushalterupally-source/clinical-case-simulator)**
+
+The two still ship as one product. `pyq-app/build/stage.sh` assembles a single site with the PYQ app
+at the root and the simulator at `/simulator/`, sharing one origin, one palette and one theme
+setting. It finds the simulator via `SIMULATOR_SRC` if you point it at a checkout, and clones it
+otherwise:
+
 ```bash
-npm install
-npm run dev
+git clone --depth 1 https://github.com/koushalterupally-source/Medqbank /tmp/medqbank
+
+SIMULATOR_SRC=/path/to/clinical-case-simulator \
+  bash pyq-app/build/stage.sh /tmp/medqbank/android/app/src/main/assets dist
 ```
 
-### Type Checking & Linting
+## Where the questions come from
+
+None of it is committed here — it is derived data, rebuilt from source on every build.
+
+| Source | Questions | Repository |
+|---|---:|---|
+| PYQ + CEREB | 12,426 practice, 165 mock papers | [`Medqbank`](https://github.com/koushalterupally-source/Medqbank) |
+| Arrow *(optional)* | 16,278 | [`thesauceypotato/Medtrix-Android-Final`](https://github.com/thesauceypotato/Medtrix-Android-Final) — a third party's |
+
+## Tests
+
 ```bash
-npm run lint
+cd pyq-app && node --test          # engine, scheduler, sanitizer, module graph
+cd pyq-app && node tests/smoke.mjs # the whole app, driven in Chromium
 ```
-
-### Run Verification Test Suite
-```bash
-npm test
-```
-
-### Build for Production
-```bash
-npm run build
-```
-
-## Data Persistence & Storage
-
-Session data and question bank indices are stored locally in browser IndexedDB (`PYQ_CCS_Simulator_DB`) with fallbacks to `localStorage`. Full user profiles and QBank indices can be exported or imported as JSON files from the PYQ Index Builder view.

@@ -29,6 +29,8 @@ const SHELL = [
   './src/sanitize.js',
   './src/gt.js',
   './src/practice.js',
+  './src/srs.js',
+  './src/anki-deck.js',
   './src/screens/home.js',
   './src/screens/browse.js',
   './src/screens/practice-screen.js',

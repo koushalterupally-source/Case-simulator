@@ -11,6 +11,17 @@ Asserts:
   - counts in catalog.json match the actual shard contents
   - paper question counts match the catalog
 
+These checks are source-agnostic over catalog.practice, so PYQ, CEREB and -- when
+build_index.py was run with --arrow -- Arrow are all covered by the same generic pass: every
+answer index in range, every .q.json/.a.json pair aligned by id and length, no shard file over
+1 MB, and catalog counts matching shard contents apply equally to all three. On top of that,
+practice items are checked against the subjectFrom convention their source is supposed to use
+(Arrow subjects are given directly by the source, not classified, but the field name differs
+from PYQ/CEREB's "given" -- see PRACTICE_SUBJECT_FROM_BY_SOURCE), and report.json's "arrow" key
+is checked for presence/absence and internal consistency to match whether Arrow data is actually
+in the catalog. Nothing here requires Arrow to be present -- every added check is skipped or
+trivially satisfied when it is not, so this still passes unchanged on an Arrow-less build.
+
 Exits non-zero (and prints every failure found) on any violation.
 
 Usage:
@@ -23,6 +34,15 @@ import os
 import sys
 
 HARD_LIMIT_BYTES = 1_048_576
+
+# Practice items carry a subjectFrom field saying how the subject tag was obtained. PYQ/CEREB
+# subjects are given directly by Medqbank ("given"); Arrow subjects are also given directly by
+# its source but use a different literal ("source") so the two are distinguishable in the data
+# itself. Any source not listed here is expected to use the default.
+PRACTICE_SUBJECT_FROM_BY_SOURCE = {
+    "Arrow": "source",
+}
+DEFAULT_PRACTICE_SUBJECT_FROM = "given"
 
 
 class Checker:
@@ -128,11 +148,16 @@ def main():
         check_file_size(chk, os.path.join(out_dir, fn), fn)
 
     catalog = load_json(os.path.join(out_dir, "catalog.json"))
+    report = load_json(os.path.join(out_dir, "report.json"))
     totals = catalog.get("totals", {})
 
     # ---- practice ------------------------------------------------------
+    # (source-agnostic: applies identically to PYQ, CEREB and Arrow entries)
     practice_sum = 0
+    arrow_practice_total = 0
     for entry in catalog.get("practice", []):
+        source = entry.get("source")
+        expected_subject_from = PRACTICE_SUBJECT_FROM_BY_SOURCE.get(source, DEFAULT_PRACTICE_SUBJECT_FROM)
         subject_sum = 0
         for group in entry.get("groups", []):
             shard_id = group.get("shard")
@@ -141,13 +166,41 @@ def main():
                 continue
             count, q_list, a_list = check_shard_pair(chk, shards_dir, shard_id, expected_count=group.get("count"))
             subject_sum += group.get("count", count)
+            for item in q_list:
+                chk.ok(item.get("subjectFrom") == expected_subject_from,
+                       f"practice group {entry.get('slug')}/{group.get('name')}: item {item.get('id')} "
+                       f"has subjectFrom={item.get('subjectFrom')!r}, expected {expected_subject_from!r} "
+                       f"for source {source!r}")
+                chk.ok(item.get("subject") == entry.get("subject"),
+                       f"practice group {entry.get('slug')}/{group.get('name')}: item {item.get('id')} "
+                       f"subject={item.get('subject')!r} does not match its own catalog entry's "
+                       f"subject={entry.get('subject')!r}")
         chk.ok(subject_sum == entry.get("total"),
                f"practice subject {entry.get('slug')}: groups sum to {subject_sum} "
                f"but total says {entry.get('total')}")
         practice_sum += entry.get("total", 0)
+        if source == "Arrow":
+            arrow_practice_total += entry.get("total", 0)
 
     chk.ok(practice_sum == totals.get("practice"),
            f"catalog totals.practice={totals.get('practice')} but practice entries sum to {practice_sum}")
+
+    # ---- Arrow (optional third practice source) --------------------------
+    # report.json carries an "arrow" section iff Arrow was built in; check the two agree with
+    # each other and with what actually landed in the catalog.
+    arrow_present_in_catalog = any(e.get("source") == "Arrow" for e in catalog.get("practice", []))
+    arrow_report = report.get("arrow")
+    chk.ok(arrow_present_in_catalog == (arrow_report is not None),
+           f"catalog has Arrow entries={arrow_present_in_catalog} but report.json arrow section "
+           f"present={arrow_report is not None} -- these must agree")
+    if arrow_report is not None:
+        chk.ok(arrow_report.get("recordsAfterDedup") == arrow_practice_total,
+               f"report.json arrow.recordsAfterDedup={arrow_report.get('recordsAfterDedup')} but "
+               f"Arrow catalog entries total {arrow_practice_total} questions")
+        bad = arrow_report.get("correctOptionOutOfRange", {})
+        chk.ok(bad.get("count") == len(bad.get("records", [])),
+               f"report.json arrow.correctOptionOutOfRange.count={bad.get('count')} does not match "
+               f"len(records)={len(bad.get('records', []))}")
 
     # ---- papers ----------------------------------------------------------
     papers_sum = 0
