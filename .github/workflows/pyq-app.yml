@@ -35,7 +35,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       # The case simulator is moving to its own repository. While it is still here, test it;
       # once it leaves, these steps skip rather than fail the run.
@@ -74,7 +73,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - uses: actions/setup-python@v5
         with:
