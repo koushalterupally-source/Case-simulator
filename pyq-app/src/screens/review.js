@@ -141,8 +141,11 @@ function candidateShardSets(catalog, source, title) {
 }
 
 /** Resolve every record's `questionId` to its full question+answer object. Records sharing the
- * same (source, title) are resolved together so a shard is only ever fetched once. */
-async function resolveQuestions(catalog, records) {
+ * same (source, title) are resolved together so a shard is only ever fetched once.
+ *
+ * Exported so other screens (see anki.js's "from your mistakes" deck) resolve mistake/bookmark
+ * records back to full questions the exact same way, rather than re-inventing the lookup. */
+export async function resolveQuestions(catalog, records) {
   const groups = new Map();
   for (const r of records) {
     const key = `${r.source || ''}||${r.title || ''}`;

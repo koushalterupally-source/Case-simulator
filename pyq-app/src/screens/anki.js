@@ -1,11 +1,35 @@
 /**
  * Anki Spaced Repetition Flashcard Screen
  * Interactive medical flashcards with 3D card flips, high-yield pearls, and rating intervals.
+ *
+ * Two deck sources, selectable via the pills at the top:
+ *  - "High-Yield Deck": the 40 curated cards below, filterable by subject.
+ *  - "From Your Mistakes": built at runtime from the `mistakes` + `bookmarks` stores, resolved to
+ *    full questions the same way review.js does (see `resolveQuestions`, imported from there).
+ *
+ * Ratings are real: each Again/Hard/Good/Easy press runs the card through srs.js's scheduler and
+ * persists the result to the `srs` store keyed by questionId. Only cards that are actually due
+ * are shown, soonest-due first; a card just rated drops out of the current session's queue
+ * immediately (it won't reappear until it's due again, which for a fresh Good/Easy press is not
+ * this session). The due-filtering, ordering, and mistake-record de-duplication are pure logic —
+ * see src/anki-deck.js and tests/anki.test.mjs.
  */
 
 import * as store from '../store.js';
-import * as ui from '../ui.js';
-import { el, clear } from '../dom.js';
+import * as data from '../data.js';
+import { el, html, clear, optionKey } from '../dom.js';
+import { resolveQuestions } from './review.js';
+import {
+  RATINGS,
+  formatInterval,
+  previewIntervals,
+  nextStateFor,
+  selectDueCards,
+  formatDueEta,
+  collectMistakeRecords,
+  toMistakeCard,
+  curatedToCard,
+} from '../anki-deck.js';
 
 const ANKI_DECKS = [
   { id: 'anki_01', subject: 'Medicine', front: 'What is the diagnostic triad of Normal Pressure Hydrocephalus (NPH)?', back: 'Triad: Wet, Wacky, Wobbly\n1. Urinary Incontinence\n2. Dementia / Cognitive Decline\n3. Gait Apraxia (Magnetic Gait)\n\nHigh-Yield Pearl: Large-volume lumbar puncture is both diagnostic and therapeutic (Miller Fisher Test).', tag: 'Neurology' },
@@ -51,14 +75,31 @@ const ANKI_DECKS = [
   { id: 'anki_41', subject: 'Anaesthesia', front: 'What is the Mallampati score used for?', back: 'Predicting the ease of endotracheal intubation based on the visibility of the base of the uvula, faucial pillars, and soft palate.\n\nPearl: Class 1 = full visibility (easy); Class 4 = only hard palate visible (difficult).', tag: 'Airway' }
 ];
 
+/* -------------------------------------------------------------------------- deck-source pills */
+
+const DECK_SOURCES = [
+  { key: 'curated', label: 'High-Yield Deck' },
+  { key: 'mistakes', label: 'From Your Mistakes' },
+];
+
+/* --------------------------------------------------------------------------------- screen state */
+
+let deckSource = 'curated';
+let selectedSubject = 'ALL';
+let sessionQueue = []; // due cards for the current deck/filter, soonest-due first
 let currentCardIndex = 0;
 let isFlipped = false;
-let selectedSubject = 'ALL';
 let completedCount = 0;
+let lastMeta = null; // { totalRecords, totalResolved, resolveError, nextDueAt, now } from the last paint()
+let loadToken = 0; // guards against a stale async paint() clobbering a newer one
 
 export async function show(root) {
-  clear(root);
-  setTitle('Anki High-Yield Deck');
+  deckSource = 'curated';
+  selectedSubject = 'ALL';
+  sessionQueue = [];
+  currentCardIndex = 0;
+  isFlipped = false;
+  lastMeta = null;
 
   try {
     const saved = await store.get('ankiProgress', 'count');
@@ -69,175 +110,387 @@ export async function show(root) {
     console.warn('Failed to load anki progress', err);
   }
 
-  function renderView() {
-    clear(root);
-    setTitle('Anki High-Yield Deck');
+  await paint(root);
+}
 
-    const container = el('div', { class: 'screen screen--anki' });
+/* ------------------------------------------------------------------------- loading the deck */
 
-    const filteredDeck = selectedSubject === 'ALL'
-      ? ANKI_DECKS
-      : ANKI_DECKS.filter((c) => c.subject === selectedSubject);
+/** Build the "from your mistakes" deck's raw card list (before due-filtering). */
+async function loadMistakeCards() {
+  let mistakeRecords = [];
+  let bookmarkRecords = [];
+  try {
+    mistakeRecords = await store.getAll('mistakes');
+  } catch (err) {
+    console.warn('anki: could not read mistakes', err);
+  }
+  try {
+    bookmarkRecords = await store.getAll('bookmarks');
+  } catch (err) {
+    console.warn('anki: could not read bookmarks', err);
+  }
 
-    if (currentCardIndex >= filteredDeck.length) {
-      currentCardIndex = 0;
-    }    const card = filteredDeck[currentCardIndex];
+  const records = collectMistakeRecords(mistakeRecords, bookmarkRecords);
+  if (records.length === 0) return { cards: [], totalRecords: 0, totalResolved: 0 };
 
-    const header = el('div', { class: 'anki-header' }, [
-      el('div', {}, [
-        el('div', { class: 'anki-header__title', text: '📇 Medical Spaced Repetition' }),
-        el('div', { class: 'anki-header__sub', text: `${filteredDeck.length} High-Yield Cards · ${completedCount} Reviewed` }),
-      ]),
-      el('div', { class: 'anki-badge', text: `Card ${currentCardIndex + 1} / ${filteredDeck.length}` }),
-    ]);
-    container.appendChild(header);
+  let catalog;
+  try {
+    catalog = await data.loadCatalog();
+  } catch (err) {
+    console.warn('anki: could not load catalog to resolve mistakes', err);
+    return { cards: [], totalRecords: records.length, totalResolved: 0, error: true };
+  }
 
-    const subjects = ['ALL', ...Array.from(new Set(ANKI_DECKS.map((c) => c.subject)))];
-    const pills = el('div', { class: 'filter-pills' }, subjects.map((sub) =>
+  let resolved;
+  try {
+    resolved = await resolveQuestions(catalog, records);
+  } catch (err) {
+    console.warn('anki: could not resolve mistake/bookmark questions', err);
+    return { cards: [], totalRecords: records.length, totalResolved: 0, error: true };
+  }
+
+  const cards = [];
+  for (const r of records) {
+    const q = resolved.get(r.questionId);
+    if (!q) continue; // unresolved (paper/group gone, shard failed) — skip silently, per spec
+    cards.push(toMistakeCard(r, q));
+  }
+  return { cards, totalRecords: records.length, totalResolved: cards.length };
+}
+
+/** Load the current deck source, apply due-filtering, and paint. */
+async function paint(root) {
+  const token = ++loadToken;
+  clear(root);
+  setTitle('Anki High-Yield Deck');
+  root.appendChild(el('div', { class: 'spinner' }));
+
+  const now = Date.now();
+  let cards;
+  let totalRecords;
+  let totalResolved;
+  let resolveError = null;
+
+  if (deckSource === 'curated') {
+    const raw = selectedSubject === 'ALL' ? ANKI_DECKS : ANKI_DECKS.filter((c) => c.subject === selectedSubject);
+    cards = raw.map(curatedToCard);
+    totalRecords = totalResolved = cards.length;
+  } else {
+    const built = await loadMistakeCards();
+    if (token !== loadToken) return; // a newer paint() superseded this one
+    cards = built.cards;
+    totalRecords = built.totalRecords;
+    totalResolved = built.totalResolved;
+    resolveError = built.error || null;
+  }
+
+  let srsRecords = [];
+  try {
+    srsRecords = await store.getAll('srs');
+  } catch (err) {
+    console.warn('anki: could not read srs state', err);
+  }
+  if (token !== loadToken) return;
+
+  const srsById = new Map(srsRecords.map((s) => [s.questionId, s]));
+  const { dueCards, nextDueAt } = selectDueCards(cards, srsById, now);
+
+  sessionQueue = dueCards;
+  if (currentCardIndex >= sessionQueue.length) currentCardIndex = 0;
+
+  lastMeta = { totalRecords, totalResolved, resolveError, nextDueAt, now };
+  renderView(root);
+}
+
+/* ---------------------------------------------------------------------------------- rendering */
+
+function renderView(root) {
+  clear(root);
+  setTitle('Anki High-Yield Deck');
+
+  const container = el('div', { class: 'screen screen--anki' });
+
+  const deckLabel = deckSource === 'curated' ? 'Medical Spaced Repetition' : 'From Your Mistakes';
+  const subtitle =
+    deckSource === 'curated'
+      ? `${sessionQueue.length} due now · ${completedCount} Reviewed`
+      : `${sessionQueue.length} due now · ${lastMeta.totalResolved} in deck · ${completedCount} Reviewed`;
+
+  const header = el('div', { class: 'anki-header' }, [
+    el('div', {}, [
+      el('div', { class: 'anki-header__title', text: `📇 ${deckLabel}` }),
+      el('div', { class: 'anki-header__sub', text: subtitle }),
+    ]),
+    el('div', {
+      class: 'anki-badge',
+      text: sessionQueue.length ? `Card ${currentCardIndex + 1} / ${sessionQueue.length}` : '0 / 0',
+    }),
+  ]);
+  container.appendChild(header);
+
+  const sourcePills = el(
+    'div',
+    { class: 'filter-pills' },
+    DECK_SOURCES.map((d) =>
       el(
         'button',
         {
-          class: `filter-pill ${selectedSubject === sub ? 'filter-pill--active' : ''}`,
+          class: `filter-pill ${deckSource === d.key ? 'filter-pill--active' : ''}`,
           type: 'button',
           onclick: () => {
-            selectedSubject = sub;
+            if (deckSource === d.key) return;
+            deckSource = d.key;
+            selectedSubject = 'ALL';
             currentCardIndex = 0;
             isFlipped = false;
-            renderView();
+            paint(root);
           },
         },
-        [el('span', { text: sub === 'ALL' ? 'All Subjects' : sub })]
+        [el('span', { text: d.label })]
       )
-    ));
+    )
+  );
+  container.appendChild(sourcePills);
+
+  if (deckSource === 'curated') {
+    const subjects = ['ALL', ...Array.from(new Set(ANKI_DECKS.map((c) => c.subject)))];
+    const pills = el(
+      'div',
+      { class: 'filter-pills' },
+      subjects.map((sub) =>
+        el(
+          'button',
+          {
+            class: `filter-pill ${selectedSubject === sub ? 'filter-pill--active' : ''}`,
+            type: 'button',
+            onclick: () => {
+              if (selectedSubject === sub) return;
+              selectedSubject = sub;
+              currentCardIndex = 0;
+              isFlipped = false;
+              paint(root);
+            },
+          },
+          [el('span', { text: sub === 'ALL' ? 'All Subjects' : sub })]
+        )
+      )
+    );
     container.appendChild(pills);
+  }
 
-    if (!card) {
-      container.appendChild(el('div', { class: 'empty' }, [
-        el('span', { class: 'empty__icon', text: '🎉' }),
-        el('p', { text: 'All cards in this deck completed! Select another subject to continue.' }),
-      ]));
-      root.appendChild(container);
-      return;
+  const card = sessionQueue[currentCardIndex];
+
+  if (!card) {
+    container.appendChild(renderEmptyState());
+    root.appendChild(container);
+    return;
+  }
+
+  container.appendChild(renderFlashcard(root, card));
+  container.appendChild(isFlipped ? renderRatingBar(root, card) : renderRevealBar(root));
+
+  root.appendChild(container);
+}
+
+function renderEmptyState() {
+  const meta = lastMeta || {};
+
+  if (deckSource === 'mistakes' && meta.resolveError) {
+    return el('div', { class: 'empty' }, [
+      el('span', { class: 'empty__icon', text: '⚠️' }),
+      el('p', { text: 'Could not load the question bank to build this deck right now.' }),
+    ]);
+  }
+  if (deckSource === 'mistakes' && meta.totalRecords === 0) {
+    return el('div', { class: 'empty' }, [
+      el('span', { class: 'empty__icon', text: '🔖' }),
+      el('p', {
+        text: 'No mistakes or bookmarks yet — wrong answers from practice and starred questions will show up here.',
+      }),
+    ]);
+  }
+  if (deckSource === 'mistakes' && meta.totalResolved === 0) {
+    return el('div', { class: 'empty' }, [
+      el('span', { class: 'empty__icon', text: '🔍' }),
+      el('p', { text: 'None of your saved mistakes or bookmarks could be found in the current question bank.' }),
+    ]);
+  }
+
+  if (meta.nextDueAt != null) {
+    return el('div', { class: 'empty' }, [
+      el('span', { class: 'empty__icon', text: '🎉' }),
+      el('p', {
+        text: `All caught up! Next card is due ${formatDueEta(meta.nextDueAt, meta.now)} (${new Date(
+          meta.nextDueAt
+        ).toLocaleString()}).`,
+      }),
+    ]);
+  }
+
+  return el('div', { class: 'empty' }, [
+    el('span', { class: 'empty__icon', text: '🎉' }),
+    el('p', {
+      text:
+        deckSource === 'curated'
+          ? 'All cards in this deck completed! Select another subject to continue.'
+          : 'All caught up on your mistakes and bookmarks!',
+    }),
+  ]);
+}
+
+function renderFlashcard(root, card) {
+  const frontContent = el('div', { class: 'anki-card__content' });
+  if (card.kind === 'mistake') {
+    const prompt = el('div', { class: 'anki-card__prompt qtext' });
+    html(prompt, card.front);
+    frontContent.appendChild(prompt);
+  } else {
+    frontContent.appendChild(el('div', { class: 'anki-card__prompt', text: card.front }));
+  }
+
+  const backContent = el('div', { class: 'anki-card__content' });
+  if (card.kind === 'mistake') {
+    const answerWrap = el('div', {
+      class: 'anki-card__answer',
+      style: { maxHeight: '380px', overflowY: 'auto' },
+    });
+    answerWrap.appendChild(
+      el('div', {
+        style: { fontWeight: '700', marginBottom: '10px' },
+        text: `Correct answer: ${optionKey(card.correctIndex)}. ${card.optionText}`,
+      })
+    );
+    if (card.hasExplanation) {
+      const body = el('div', { class: 'explain__body' });
+      html(body, card.detail);
+      answerWrap.appendChild(
+        el('div', { class: 'explain' }, [el('div', { class: 'explain__head', text: 'Explanation' }), body])
+      );
+    } else {
+      // 27% of the corpus has no real explanation. Say so rather than showing an empty panel.
+      answerWrap.appendChild(
+        el('div', { class: 'explain explain--stub' }, [
+          el('div', { class: 'explain__head', text: 'No explanation in the source' }),
+          el('div', { text: card.short || `The answer is ${optionKey(card.correctIndex)}.` }),
+        ])
+      );
     }
+    backContent.appendChild(answerWrap);
+  } else {
+    backContent.appendChild(el('div', { class: 'anki-card__answer', text: card.back }));
+  }
 
-    const flashcard = el('div', {
+  return el(
+    'div',
+    {
       class: `anki-card ${isFlipped ? 'anki-card--flipped' : ''}`,
       onclick: () => {
         isFlipped = !isFlipped;
-        renderView();
-      }
-    }, [
+        renderView(root);
+      },
+    },
+    [
       el('div', { class: 'anki-card__side anki-card__front' }, [
         el('div', { class: 'anki-card__meta' }, [
           el('span', { class: 'chip chip--subject', text: card.subject }),
           el('span', { class: 'chip chip--topic', text: card.tag }),
           el('span', { class: 'anki-card__hint', text: 'Tap to flip' }),
         ]),
-        el('div', { class: 'anki-card__content' }, [
-          el('div', { class: 'anki-card__prompt', text: card.front }),
-        ]),
+        frontContent,
         el('div', { class: 'anki-card__footer' }, [
-          el('span', { text: '🔄 Tap anywhere to reveal High-Yield Pearl' }),
+          el('span', {
+            text:
+              card.kind === 'mistake'
+                ? '🔄 Tap anywhere to reveal the answer'
+                : '🔄 Tap anywhere to reveal High-Yield Pearl',
+          }),
         ]),
       ]),
       el('div', { class: 'anki-card__side anki-card__back' }, [
         el('div', { class: 'anki-card__meta' }, [
           el('span', { class: 'chip chip--subject', text: card.subject }),
-          el('span', { class: 'chip chip--exam', text: '⭐ High-Yield Answer' }),
+          el('span', {
+            class: 'chip chip--exam',
+            text: card.kind === 'mistake' ? '✅ Correct Answer' : '⭐ High-Yield Answer',
+          }),
           el('span', { class: 'anki-card__hint', text: 'Tap to flip back' }),
         ]),
-        el('div', { class: 'anki-card__content' }, [
-          el('div', { class: 'anki-card__answer', text: card.back }),
-        ]),
+        backContent,
       ]),
-    ]);
-    container.appendChild(flashcard);
+    ]
+  );
+}
 
-    if (isFlipped) {
-      const ratingBar = el('div', { class: 'anki-ratings' }, [
-        el('button', {
-          class: 'anki-btn anki-btn--again',
+function renderRatingBar(root, card) {
+  const intervals = previewIntervals(card.srsState, Date.now());
+  return el(
+    'div',
+    { class: 'anki-ratings' },
+    RATINGS.map((r) =>
+      el(
+        'button',
+        {
+          class: `anki-btn ${r.cls}`,
           type: 'button',
           onclick: (e) => {
             e.stopPropagation();
-            rateCard(filteredDeck, 'again');
-          }
-        }, [
-          el('div', { class: 'anki-btn__label', text: 'Again' }),
-          el('div', { class: 'anki-btn__interval', text: '< 1m' }),
-        ]),
-        el('button', {
-          class: 'anki-btn anki-btn--hard',
-          type: 'button',
-          onclick: (e) => {
-            e.stopPropagation();
-            rateCard(filteredDeck, 'hard');
-          }
-        }, [
-          el('div', { class: 'anki-btn__label', text: 'Hard' }),
-          el('div', { class: 'anki-btn__interval', text: '10m' }),
-        ]),
-        el('button', {
-          class: 'anki-btn anki-btn--good',
-          type: 'button',
-          onclick: (e) => {
-            e.stopPropagation();
-            rateCard(filteredDeck, 'good');
-          }
-        }, [
-          el('div', { class: 'anki-btn__label', text: 'Good' }),
-          el('div', { class: 'anki-btn__interval', text: '1d' }),
-        ]),
-        el('button', {
-          class: 'anki-btn anki-btn--easy',
-          type: 'button',
-          onclick: (e) => {
-            e.stopPropagation();
-            rateCard(filteredDeck, 'easy');
-          }
-        }, [
-          el('div', { class: 'anki-btn__label', text: 'Easy' }),
-          el('div', { class: 'anki-btn__interval', text: '4d' }),
-        ]),
-      ]);
-      container.appendChild(ratingBar);
-    } else {
-      const revealBar = el('div', { class: 'anki-reveal-bar' }, [
-        el('button', {
-          class: 'btn btn--primary',
-          type: 'button',
-          style: { width: '100%', maxWidth: '320px', margin: '0 auto' },
-          text: 'Show Answer / Pearl',
-          onclick: () => {
-            isFlipped = true;
-            renderView();
-          }
-        }),
-      ]);
-      container.appendChild(revealBar);
-    }
+            rateCard(root, card, r.key);
+          },
+        },
+        [
+          el('div', { class: 'anki-btn__label', text: r.label }),
+          el('div', { class: 'anki-btn__interval', text: formatInterval(intervals[r.key]) }),
+        ]
+      )
+    )
+  );
+}
 
-    root.appendChild(container);
+function renderRevealBar(root) {
+  return el('div', { class: 'anki-reveal-bar' }, [
+    el('button', {
+      class: 'btn btn--primary',
+      type: 'button',
+      style: { width: '100%', maxWidth: '320px', margin: '0 auto' },
+      text: 'Show Answer / Pearl',
+      onclick: () => {
+        isFlipped = true;
+        renderView(root);
+      },
+    }),
+  ]);
+}
+
+/* --------------------------------------------------------------------------------- rating */
+
+async function rateCard(root, card, ratingKey) {
+  const now = Date.now();
+  const nextState = nextStateFor(card.srsState, ratingKey, now);
+
+  try {
+    await store.put('srs', { questionId: card.id, ...nextState });
+  } catch (err) {
+    console.warn('anki: could not save srs state', err);
   }
 
-  async function rateCard(filteredDeck, rating) {
-    completedCount += 1;
-    
-    try {
-      await store.put('ankiProgress', { id: 'count', value: completedCount });
-    } catch (err) {
-      console.warn('Failed to save anki progress', err);
-    }
-    
-    isFlipped = false;
-    currentCardIndex = (currentCardIndex + 1) % filteredDeck.length;
-    renderView();
+  completedCount += 1;
+  try {
+    await store.put('ankiProgress', { id: 'count', value: completedCount });
+  } catch (err) {
+    console.warn('anki: could not save anki progress', err);
   }
 
-  function setTitle(text) {
-    const t = document.getElementById('appbar-title');
-    if (t) t.textContent = text;
-  }
+  // A card that isn't due yet must not keep reappearing in this session: drop it from the
+  // in-memory queue now rather than recomputing due-ness against a clock that keeps advancing.
+  const idx = sessionQueue.findIndex((c) => c.id === card.id);
+  if (idx !== -1) sessionQueue.splice(idx, 1);
+  if (currentCardIndex >= sessionQueue.length) currentCardIndex = Math.max(0, sessionQueue.length - 1);
+  isFlipped = false;
 
-  renderView();
+  renderView(root);
+}
+
+function setTitle(text) {
+  const t = document.getElementById('appbar-title');
+  if (t) t.textContent = text;
 }
