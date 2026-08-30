@@ -13,3 +13,7 @@ site/
 
 # Screenshots from the end-to-end run against a staged site — regenerated, not source.
 site-shots/
+
+# Transient worktrees created by background agents. Scratch state, not source —
+# each contains a nested checkout with its own .git pointer file.
+.claude/worktrees/
