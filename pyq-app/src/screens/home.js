@@ -110,7 +110,7 @@ export async function show(root) {
         // 4) Anki
         marrowCard('📇', '4) Anki Flashcards', 'High-Yield Medical Spaced Repetition Decks & Pearls', 'Spaced Recall', 'badge--amber', () => ui.navigate('anki')),
         // 5) Clinical Case Simulator
-        marrowCard('🩺', '5) Case Simulator', 'Emergency room case management with vitals & ICU decisions', 'Live Sim', 'badge--cyan', () => ui.navigate('cases')),
+        marrowCard('🩺', '5) Clinical Cases', 'Emergency room case management with vitals & ICU decisions', 'Live Sim', 'badge--cyan', () => ui.navigate('cases')),
         // Review Mistake Book
         marrowCard('⭐', '6) Mistake Book', 'Instant revision for all bookmarked and incorrect attempts', `${mistakes.length} Mistakes`, 'badge--rose', () => ui.navigate('review')),
       ]),
